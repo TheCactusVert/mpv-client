@@ -2,6 +2,11 @@
 name = "mpv-client"
 version = "0.1.0"
 edition = "2021"
+authors = ["Kevin Gavrois <kevin@gavrois.fr>"]
+description = "Libmpv binding that allow you to create plugin for MPV in Rust"
+license = "LGPL-2.1"
+repository = "https://github.com/TheCactusVert/mpv-client"
+keywords = ["mpv", "libmpv"]
 
 [lib]
 name = "mpv_client"
