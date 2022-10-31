@@ -1,6 +1,6 @@
-pub mod error;
+mod error;
 mod ffi;
-pub mod format;
+mod format;
 
 use error::{Error, Result};
 use ffi::*;
