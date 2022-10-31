@@ -80,12 +80,13 @@ impl fmt::Display for Event {
 }
 
 impl Handle {
+    /// Wrap a raw mpv_handle
+    /// The pointer must not be null
     pub fn from_ptr(handle: RawHandle) -> Self {
         assert!(!handle.is_null());
         Self(handle)
     }
 
-    // TODO rewrite this crap
     pub fn wait_event(&self, timeout: f64) -> (u64, Result<Event>) {
         unsafe {
             let mpv_event = mpv_wait_event(self.0, timeout);
@@ -137,7 +138,6 @@ impl Handle {
             .unwrap_or("unknown")
     }
 
-    // TODO clean the ecode
     pub fn command(&self, args: &[String]) -> Result<()> {
         let c_args = args
             .iter()
@@ -148,6 +148,7 @@ impl Handle {
         mpv_result!(mpv_command(self.0, raw_args.as_ptr()))
     }
 
+    /// Display a message on the screen.
     pub fn osd_message(&self, text: String, duration: Duration) -> Result<()> {
         self.command(&[CMD_SHOW_TEXT.to_string(), text, duration.as_millis().to_string()])
     }
@@ -178,27 +179,32 @@ impl Handle {
 }
 
 impl EventStartFile {
+    /// Wrap a raw mpv_event_start_file
+    /// The pointer must not be null
     fn from_ptr(event: *mut mpv_event_start_file) -> Self {
         assert!(!event.is_null());
         Self(event)
     }
 
+    /// Playlist entry ID of the file being loaded now.
     pub fn get_playlist_entry_id(&self) -> u64 {
         unsafe { (*self.0).playlist_entry_id }
     }
 }
 
 impl EventProperty {
+    /// Wrap a raw mpv_event_property
+    /// The pointer must not be null
     fn from_ptr(event: *mut mpv_event_property) -> Self {
         assert!(!event.is_null());
         Self(event)
     }
 
+    /// Name of the property.
     pub fn get_name(&self) -> &str {
         unsafe { CStr::from_ptr((*self.0).name) }.to_str().unwrap_or("unknown")
     }
 
-    // TODO I don't like it
     pub fn get_data<T: Format>(&self) -> Option<T> {
         unsafe {
             if (*self.0).format == T::FORMAT {
@@ -211,15 +217,19 @@ impl EventProperty {
 }
 
 impl EventHook {
+    /// Wrap a raw mpv_event_hook.
+    /// The pointer must not be null
     fn from_ptr(event: *mut mpv_event_hook) -> Self {
         assert!(!event.is_null());
         Self(event)
     }
 
+    /// The hook name as passed to hook_add().
     pub fn get_name(&self) -> &str {
         unsafe { CStr::from_ptr((*self.0).name) }.to_str().unwrap_or("unknown")
     }
 
+    /// Internal ID that must be passed to hook_continue().
     pub fn get_id(&self) -> u64 {
         unsafe { (*self.0).id }
     }
