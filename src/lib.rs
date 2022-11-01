@@ -113,25 +113,21 @@ impl fmt::Display for Event {
         match *self {
             Self::None => write!(f, "none"),
             Self::Shutdown => write!(f, "shutdown"),
-            Self::LogMessage => write!(f, "log message"),
-            Self::GetPropertyReply(ref data) => {
-                write!(f, "get property reply [{}]", data.name())
-            }
-            Self::SetPropertyReply => write!(f, "set property reply"),
-            Self::CommandReply => write!(f, "command reply"),
-            Self::StartFile(ref data) => {
-                write!(f, "start file [{}]", data.playlist_entry_id())
-            }
-            Self::EndFile => write!(f, "end file"),
-            Self::FileLoaded => write!(f, "file loaded"),
-            Self::ClientMessage => write!(f, "client message"),
-            Self::VideoReconfig => write!(f, "video reconfig"),
-            Self::AudioReconfig => write!(f, "audio reconfig"),
+            Self::LogMessage => write!(f, "log_message"),
+            Self::GetPropertyReply(ref data) => write!(f, "get_property_reply({})", data),
+            Self::SetPropertyReply => write!(f, "set_property_reply"),
+            Self::CommandReply => write!(f, "command_reply"),
+            Self::StartFile(ref data) => write!(f, "start_file({})", data),
+            Self::EndFile => write!(f, "end_file"),
+            Self::FileLoaded => write!(f, "file_loaded"),
+            Self::ClientMessage => write!(f, "client_message"),
+            Self::VideoReconfig => write!(f, "video_reconfig"),
+            Self::AudioReconfig => write!(f, "audio_reconfig"),
             Self::Seek => write!(f, "seek"),
-            Self::PlaybackRestart => write!(f, "playback restart"),
-            Self::PropertyChange(ref data) => write!(f, "property change [{}]", data.name()),
-            Self::QueueOverflow => write!(f, "queue overflow"),
-            Self::Hook(ref data) => write!(f, "hook [{}]", data.name()),
+            Self::PlaybackRestart => write!(f, "playback_restart"),
+            Self::PropertyChange(ref data) => write!(f, "property_change({})", data),
+            Self::QueueOverflow => write!(f, "queue_overflow"),
+            Self::Hook(ref data) => write!(f, "hook({})", data),
         }
     }
 }
@@ -283,6 +279,12 @@ impl StartFile {
     }
 }
 
+impl fmt::Display for StartFile {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.playlist_entry_id())
+    }
+}
+
 impl Property {
     /// Wrap a raw mpv_event_property
     /// The pointer must not be null
@@ -307,6 +309,12 @@ impl Property {
     }
 }
 
+impl fmt::Display for Property {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
 impl Hook {
     /// Wrap a raw mpv_event_hook.
     /// The pointer must not be null
@@ -323,5 +331,11 @@ impl Hook {
     /// Internal ID that must be passed to `Handle::hook_continue`.
     pub fn id(&self) -> u64 {
         unsafe { (*self.0).id }
+    }
+}
+
+impl fmt::Display for Hook {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name())
     }
 }
