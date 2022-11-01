@@ -6,12 +6,13 @@ use error::{Error, Result};
 use ffi::*;
 use format::Format;
 
-use std::ffi::{CStr, CString};
+use std::ffi::{c_void, CStr, CString};
 use std::fmt;
 use std::time::Duration;
 
 pub type RawHandle = *mut mpv_handle;
 
+/// Client context used by the client API. Every client has its own private handle.
 pub struct Handle(*mut mpv_handle);
 
 pub struct EventStartFile(*mut mpv_event_start_file);
@@ -82,62 +83,81 @@ impl fmt::Display for Event {
 impl Handle {
     /// Wrap a raw mpv_handle
     /// The pointer must not be null
-    pub fn from_ptr(handle: RawHandle) -> Self {
-        assert!(!handle.is_null());
-        Self(handle)
+    pub fn from_ptr(ptr: RawHandle) -> Self {
+        assert!(!ptr.is_null());
+        Self(ptr)
     }
 
-    pub fn wait_event(&self, timeout: f64) -> (u64, Result<Event>) {
-        unsafe {
-            let mpv_event = mpv_wait_event(self.0, timeout);
-
-            if mpv_event.is_null() {
-                return (0, Ok(Event::None));
-            }
-
-            let mpv_reply: u64 = (*mpv_event).reply_userdata;
-
-            if (*mpv_event).error != mpv_error::SUCCESS {
-                return (mpv_reply, Err(Error::new((*mpv_event).error)));
-            }
-
-            (
-                mpv_reply,
-                Ok(match (*mpv_event).event_id {
-                    mpv_event_id::SHUTDOWN => Event::Shutdown,
-                    mpv_event_id::LOG_MESSAGE => Event::LogMessage,
-                    mpv_event_id::GET_PROPERTY_REPLY => {
-                        Event::GetPropertyReply(EventProperty::from_ptr((*mpv_event).data as *mut mpv_event_property))
-                    }
-                    mpv_event_id::SET_PROPERTY_REPLY => Event::SetPropertyReply,
-                    mpv_event_id::COMMAND_REPLY => Event::CommandReply,
-                    mpv_event_id::START_FILE => {
-                        Event::StartFile(EventStartFile::from_ptr((*mpv_event).data as *mut mpv_event_start_file))
-                    }
-                    mpv_event_id::END_FILE => Event::EndFile,
-                    mpv_event_id::FILE_LOADED => Event::FileLoaded,
-                    mpv_event_id::CLIENT_MESSAGE => Event::ClientMessage,
-                    mpv_event_id::VIDEO_RECONFIG => Event::VideoReconfig,
-                    mpv_event_id::AUDIO_RECONFIG => Event::AudioReconfig,
-                    mpv_event_id::SEEK => Event::Seek,
-                    mpv_event_id::PLAYBACK_RESTART => Event::PlaybackRestart,
-                    mpv_event_id::PROPERTY_CHANGE => {
-                        Event::PropertyChange(EventProperty::from_ptr((*mpv_event).data as *mut mpv_event_property))
-                    }
-                    mpv_event_id::QUEUE_OVERFLOW => Event::QueueOverflow,
-                    mpv_event_id::HOOK => Event::Hook(EventHook::from_ptr((*mpv_event).data as *mut mpv_event_hook)),
-                    _ => Event::None,
-                }),
-            )
+    fn upcast_event(event_id: mpv_event_id, data: *mut c_void) -> Event {
+        match event_id {
+            mpv_event_id::SHUTDOWN => Event::Shutdown,
+            mpv_event_id::LOG_MESSAGE => Event::LogMessage,
+            mpv_event_id::GET_PROPERTY_REPLY => Event::GetPropertyReply(EventProperty::from_raw(data)),
+            mpv_event_id::SET_PROPERTY_REPLY => Event::SetPropertyReply,
+            mpv_event_id::COMMAND_REPLY => Event::CommandReply,
+            mpv_event_id::START_FILE => Event::StartFile(EventStartFile::from_raw(data)),
+            mpv_event_id::END_FILE => Event::EndFile,
+            mpv_event_id::FILE_LOADED => Event::FileLoaded,
+            mpv_event_id::CLIENT_MESSAGE => Event::ClientMessage,
+            mpv_event_id::VIDEO_RECONFIG => Event::VideoReconfig,
+            mpv_event_id::AUDIO_RECONFIG => Event::AudioReconfig,
+            mpv_event_id::SEEK => Event::Seek,
+            mpv_event_id::PLAYBACK_RESTART => Event::PlaybackRestart,
+            mpv_event_id::PROPERTY_CHANGE => Event::PropertyChange(EventProperty::from_raw(data)),
+            mpv_event_id::QUEUE_OVERFLOW => Event::QueueOverflow,
+            mpv_event_id::HOOK => Event::Hook(EventHook::from_raw(data)),
+            _ => Event::None,
         }
     }
 
+    /// Wait for the next event, or until the timeout expires, or if another thread
+    /// makes a call to `mpv_wakeup()`. Passing 0 as timeout will never wait, and
+    /// is suitable for polling.
+    ///
+    /// The internal event queue has a limited size (per client handle). If you
+    /// don't empty the event queue quickly enough with `Handle::wait_event`, it will
+    /// overflow and silently discard further events. If this happens, making
+    /// asynchronous requests will fail as well (with MPV_ERROR_EVENT_QUEUE_FULL).
+    ///
+    /// Only one thread is allowed to call this on the same `Handle` at a time.
+    /// The API won't complain if more than one thread calls this, but it will cause
+    /// race conditions in the client when accessing the shared mpv_event struct.
+    /// Note that most other API functions are not restricted by this, and no API
+    /// function internally calls `mpv_wait_event()`. Additionally, concurrent calls
+    /// to different handles are always safe.
+    ///
+    /// As long as the timeout is 0, this is safe to be called from mpv render API
+    /// threads.
+    pub fn wait_event(&self, timeout: f64) -> (u64, Result<Event>) {
+        unsafe {
+            let event = mpv_wait_event(self.0, timeout);
+
+            if event.is_null() {
+                let reply = 0;
+                let event = Ok(Event::None);
+                (reply, event)
+            } else {
+                let reply = (*event).reply_userdata;
+                let event = match (*event).error {
+                    mpv_error::SUCCESS => Ok(Self::upcast_event((*event).event_id, (*event).data)),
+                    _ => Err(Error::new((*event).error)),
+                };
+                (reply, event)
+            }
+        }
+    }
+
+    /// Return the name of this client handle. Every client has its own unique
+    /// name, which is mostly used for user interface purposes.
     pub fn client_name(&self) -> &str {
         unsafe { CStr::from_ptr(mpv_client_name(self.0)) }
             .to_str()
             .unwrap_or("unknown")
     }
 
+    /// Send a command to the player. Commands are the same as those used in
+    /// input.conf, except that this function takes parameters in a pre-split
+    /// form.
     pub fn command(&self, args: &[String]) -> Result<()> {
         let c_args = args
             .iter()
@@ -158,6 +178,12 @@ impl Handle {
         data.to_mpv(|data| mpv_result!(mpv_set_property(self.0, name.as_ptr(), T::FORMAT, data)))
     }
 
+    /// Read the value of the given property.
+    ///
+    /// If the format doesn't match with the internal format of the property, access
+    /// usually will fail with `MPV_ERROR_PROPERTY_FORMAT`. In some cases, the data
+    /// is automatically converted and access succeeds. For example, i64 is always
+    /// converted to f64, and access using String usually invokes a string formatter.
     pub fn get_property<T: Format>(&self, name: &str) -> Result<T> {
         let name = CString::new(name)?;
         T::from_mpv(|data| mpv_result!(mpv_get_property(self.0, name.as_ptr(), T::FORMAT, data)))
@@ -181,9 +207,9 @@ impl Handle {
 impl EventStartFile {
     /// Wrap a raw mpv_event_start_file
     /// The pointer must not be null
-    fn from_ptr(event: *mut mpv_event_start_file) -> Self {
-        assert!(!event.is_null());
-        Self(event)
+    fn from_raw(ptr: *mut c_void) -> Self {
+        assert!(!ptr.is_null());
+        Self(ptr as *mut mpv_event_start_file)
     }
 
     /// Playlist entry ID of the file being loaded now.
@@ -195,9 +221,9 @@ impl EventStartFile {
 impl EventProperty {
     /// Wrap a raw mpv_event_property
     /// The pointer must not be null
-    fn from_ptr(event: *mut mpv_event_property) -> Self {
-        assert!(!event.is_null());
-        Self(event)
+    fn from_raw(ptr: *mut c_void) -> Self {
+        assert!(!ptr.is_null());
+        Self(ptr as *mut mpv_event_property)
     }
 
     /// Name of the property.
@@ -219,17 +245,17 @@ impl EventProperty {
 impl EventHook {
     /// Wrap a raw mpv_event_hook.
     /// The pointer must not be null
-    fn from_ptr(event: *mut mpv_event_hook) -> Self {
-        assert!(!event.is_null());
-        Self(event)
+    fn from_raw(ptr: *mut c_void) -> Self {
+        assert!(!ptr.is_null());
+        Self(ptr as *mut mpv_event_hook)
     }
 
-    /// The hook name as passed to hook_add().
+    /// The hook name as passed to `Handle::hook_add`.
     pub fn get_name(&self) -> &str {
         unsafe { CStr::from_ptr((*self.0).name) }.to_str().unwrap_or("unknown")
     }
 
-    /// Internal ID that must be passed to hook_continue().
+    /// Internal ID that must be passed to `Handle::hook_continue`.
     pub fn get_id(&self) -> u64 {
         unsafe { (*self.0).id }
     }
