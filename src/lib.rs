@@ -15,8 +15,14 @@ pub type RawHandle = *mut mpv_handle;
 /// Client context used by the client API. Every client has its own private handle.
 pub struct Handle(*mut mpv_handle);
 
+/// Event sent before playback start of a file (before the file is loaded).
 pub struct EventStartFile(*mut mpv_event_start_file);
+
+/// Event sent due to `Handle::observe_property` or due to a response to `Handle::get_property_async`.
 pub struct EventProperty(*mut mpv_event_property);
+
+/// Event sent if a hook handler was registered with `Handle::hook_add`, and the
+/// hook is invoked.
 pub struct EventHook(*mut mpv_event_hook);
 
 static CMD_SHOW_TEXT: &str = "show-text";
@@ -133,6 +139,7 @@ impl Handle {
             let event = mpv_wait_event(self.0, timeout);
 
             if event.is_null() {
+                // TODO is it possible ?
                 let reply = 0;
                 let event = Ok(Event::None);
                 (reply, event)
