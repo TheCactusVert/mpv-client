@@ -53,7 +53,7 @@ pub enum Event {
     /// (Unlike `GetPropertyReply`, `Property` is not used.)
     SetPropertyReply,
     /// Reply to a `Handle::command_async` or mpv_command_node_async() request.
-    /// See also `EventCommand`.
+    /// See also `Command`.
     CommandReply, // TODO mpv_event_command
     /// Notification before playback start of a file (before the file is loaded).
     /// See also `StartFile`.
@@ -114,13 +114,13 @@ impl fmt::Display for Event {
             Self::None => write!(f, "none"),
             Self::Shutdown => write!(f, "shutdown"),
             Self::LogMessage => write!(f, "log message"),
-            Self::GetPropertyReply(ref event) => {
-                write!(f, "get property reply [{}]", event.get_name())
+            Self::GetPropertyReply(ref data) => {
+                write!(f, "get property reply [{}]", data.name())
             }
             Self::SetPropertyReply => write!(f, "set property reply"),
             Self::CommandReply => write!(f, "command reply"),
-            Self::StartFile(ref event) => {
-                write!(f, "start file [{}]", event.get_playlist_entry_id())
+            Self::StartFile(ref data) => {
+                write!(f, "start file [{}]", data.playlist_entry_id())
             }
             Self::EndFile => write!(f, "end file"),
             Self::FileLoaded => write!(f, "file loaded"),
@@ -129,9 +129,9 @@ impl fmt::Display for Event {
             Self::AudioReconfig => write!(f, "audio reconfig"),
             Self::Seek => write!(f, "seek"),
             Self::PlaybackRestart => write!(f, "playback restart"),
-            Self::PropertyChange(ref event) => write!(f, "property change [{}]", event.get_name()),
+            Self::PropertyChange(ref data) => write!(f, "property change [{}]", data.name()),
             Self::QueueOverflow => write!(f, "queue overflow"),
-            Self::Hook(ref event) => write!(f, "hook [{}]", event.get_name()),
+            Self::Hook(ref data) => write!(f, "hook [{}]", data.name()),
         }
     }
 }
@@ -278,7 +278,7 @@ impl StartFile {
     }
 
     /// Playlist entry ID of the file being loaded now.
-    pub fn get_playlist_entry_id(&self) -> u64 {
+    pub fn playlist_entry_id(&self) -> u64 {
         unsafe { (*self.0).playlist_entry_id }
     }
 }
@@ -292,11 +292,11 @@ impl Property {
     }
 
     /// Name of the property.
-    pub fn get_name(&self) -> &str {
+    pub fn name(&self) -> &str {
         unsafe { CStr::from_ptr((*self.0).name) }.to_str().unwrap_or("unknown")
     }
 
-    pub fn get_data<T: Format>(&self) -> Option<T> {
+    pub fn data<T: Format>(&self) -> Option<T> {
         unsafe {
             if (*self.0).format == T::FORMAT {
                 T::from_raw((*self.0).data).ok()
@@ -316,12 +316,12 @@ impl Hook {
     }
 
     /// The hook name as passed to `Handle::hook_add`.
-    pub fn get_name(&self) -> &str {
+    pub fn name(&self) -> &str {
         unsafe { CStr::from_ptr((*self.0).name) }.to_str().unwrap_or("unknown")
     }
 
     /// Internal ID that must be passed to `Handle::hook_continue`.
-    pub fn get_id(&self) -> u64 {
+    pub fn id(&self) -> u64 {
         unsafe { (*self.0).id }
     }
 }
