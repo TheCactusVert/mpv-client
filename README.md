@@ -18,7 +18,7 @@ crate-type = ["cdylib"]
 mpv-client = "0.1.2"
 ```
 
-And then the code:
+And then the code `src/lib.rs`:
 
 ```rust
 use mpv_client::{Event, Handle, RawHandle};
@@ -38,3 +38,5 @@ extern "C" fn mpv_open_cplugin(handle: RawHandle) -> std::os::raw::c_int {
   }
 }
 ```
+
+You can find more examples in [`C`](https://github.com/mpv-player/mpv-examples/tree/master/cplugins) and [`Rust`](https://github.com/TheCactusVert/mpv-sponsorblock).
