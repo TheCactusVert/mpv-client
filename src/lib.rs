@@ -194,6 +194,14 @@ impl Handle {
         mpv_result!(mpv_observe_property(self.0, reply_userdata, name.as_ptr(), T::FORMAT))
     }
 
+    /// Undo `Handle::observe_property`. This will remove all observed properties for
+    /// which the given number was passed as reply_userdata to `Handle::observe_property`.
+    ///
+    /// Safe to be called from mpv render API threads.
+    pub fn unobserve_property(&self, registered_reply_userdata: u64) -> Result<()> {
+        mpv_result!(mpv_unobserve_property(self.0, registered_reply_userdata))
+    }
+
     pub fn hook_add(&self, reply_userdata: u64, name: &str, priority: i32) -> Result<()> {
         let name = CString::new(name)?;
         mpv_result!(mpv_hook_add(self.0, reply_userdata, name.as_ptr(), priority))
