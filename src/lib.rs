@@ -25,8 +25,6 @@ pub struct EventProperty(*mut mpv_event_property);
 /// hook is invoked.
 pub struct EventHook(*mut mpv_event_hook);
 
-static CMD_SHOW_TEXT: &str = "show-text";
-
 macro_rules! mpv_result {
     ($f:expr) => {
         unsafe {
@@ -177,7 +175,7 @@ impl Handle {
 
     /// Display a message on the screen.
     pub fn osd_message(&self, text: String, duration: Duration) -> Result<()> {
-        self.command(&[CMD_SHOW_TEXT.to_string(), text, duration.as_millis().to_string()])
+        self.command(&["show-text".to_string(), text, duration.as_millis().to_string()])
     }
 
     pub fn set_property<T: Format>(&self, name: &str, data: T) -> Result<()> {
