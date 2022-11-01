@@ -17,13 +17,13 @@ pub type RawHandle = *mut mpv_handle;
 pub struct Handle(*mut mpv_handle);
 
 /// Data associated with `Event::StartFile`.
-pub struct EventStartFile(*mut mpv_event_start_file);
+pub struct StartFile(*mut mpv_event_start_file);
 
-/// Data associated with `Event::GetPropertyReply` and Event::PropertyChange`.
-pub struct EventProperty(*mut mpv_event_property);
+/// Data associated with `Event::GetPropertyReply` and `Event::PropertyChange`.
+pub struct Property(*mut mpv_event_property);
 
 /// Data associated with `Event::Hook`.
-pub struct EventHook(*mut mpv_event_hook);
+pub struct Hook(*mut mpv_event_hook);
 
 macro_rules! mpv_result {
     ($f:expr) => {
@@ -47,19 +47,19 @@ pub enum Event {
     /// See `Handle::request_log_messages`.
     LogMessage, // TODO mpv_event_log_message
     /// Reply to a `Handle::get_property_async` request.
-    /// See also `EventProperty`.
-    GetPropertyReply(EventProperty),
+    /// See also `Property`.
+    GetPropertyReply(Property),
     /// Reply to a `Handle::set_property_async` request.
-    /// (Unlike `GetPropertyReply`, `EventProperty` is not used.)
+    /// (Unlike `GetPropertyReply`, `Property` is not used.)
     SetPropertyReply,
     /// Reply to a `Handle::command_async` or mpv_command_node_async() request.
     /// See also `EventCommand`.
     CommandReply, // TODO mpv_event_command
     /// Notification before playback start of a file (before the file is loaded).
-    /// See also `EventStartFile`.
-    StartFile(EventStartFile),
+    /// See also `StartFile`.
+    StartFile(StartFile),
     /// Notification after playback end (after the file was unloaded).
-    /// See also `EventEndFile`.
+    /// See also `EndFile`.
     EndFile, // TODO mpv_event_end_file
     /// Notification when the file has been loaded (headers were read etc.), and
     /// decoding starts.
@@ -68,7 +68,7 @@ pub enum Event {
     /// first argument of the command as client name (see `Handle::client_name`) to
     /// dispatch the message, and passes along all arguments starting from the
     /// second argument as strings.
-    /// See also `EventClientMessage`.
+    /// See also `ClientMessage`.
     ClientMessage, // TODO mpv_event_client_message
     /// Happens after video changed in some way. This can happen on resolution
     /// changes, pixel format changes, or video filter changes. The event is
@@ -91,8 +91,8 @@ pub enum Event {
     /// request is finished.
     PlaybackRestart,
     /// Event sent due to mpv_observe_property().
-    /// See also `EventProperty`.
-    PropertyChange(EventProperty),
+    /// See also `Property`.
+    PropertyChange(Property),
     /// Happens if the internal per-mpv_handle ringbuffer overflows, and at
     /// least 1 event had to be dropped. This can happen if the client doesn't
     /// read the event queue quickly enough with `Handle::wait_event`, or if the
@@ -105,7 +105,7 @@ pub enum Event {
     /// hook is invoked. If you receive this, you must handle it, and continue
     /// the hook with `Handle::hook_continue`.
     /// See also `EventHook`.
-    Hook(EventHook),
+    Hook(Hook),
 }
 
 impl fmt::Display for Event {
@@ -148,10 +148,10 @@ impl Handle {
         match event_id {
             mpv_event_id::SHUTDOWN => Event::Shutdown,
             mpv_event_id::LOG_MESSAGE => Event::LogMessage,
-            mpv_event_id::GET_PROPERTY_REPLY => Event::GetPropertyReply(EventProperty::from_raw(data)),
+            mpv_event_id::GET_PROPERTY_REPLY => Event::GetPropertyReply(Property::from_raw(data)),
             mpv_event_id::SET_PROPERTY_REPLY => Event::SetPropertyReply,
             mpv_event_id::COMMAND_REPLY => Event::CommandReply,
-            mpv_event_id::START_FILE => Event::StartFile(EventStartFile::from_raw(data)),
+            mpv_event_id::START_FILE => Event::StartFile(StartFile::from_raw(data)),
             mpv_event_id::END_FILE => Event::EndFile,
             mpv_event_id::FILE_LOADED => Event::FileLoaded,
             mpv_event_id::CLIENT_MESSAGE => Event::ClientMessage,
@@ -159,9 +159,9 @@ impl Handle {
             mpv_event_id::AUDIO_RECONFIG => Event::AudioReconfig,
             mpv_event_id::SEEK => Event::Seek,
             mpv_event_id::PLAYBACK_RESTART => Event::PlaybackRestart,
-            mpv_event_id::PROPERTY_CHANGE => Event::PropertyChange(EventProperty::from_raw(data)),
+            mpv_event_id::PROPERTY_CHANGE => Event::PropertyChange(Property::from_raw(data)),
             mpv_event_id::QUEUE_OVERFLOW => Event::QueueOverflow,
-            mpv_event_id::HOOK => Event::Hook(EventHook::from_raw(data)),
+            mpv_event_id::HOOK => Event::Hook(Hook::from_raw(data)),
             _ => Event::None,
         }
     }
@@ -269,7 +269,7 @@ impl Handle {
     }
 }
 
-impl EventStartFile {
+impl StartFile {
     /// Wrap a raw mpv_event_start_file
     /// The pointer must not be null
     fn from_raw(ptr: *mut c_void) -> Self {
@@ -283,7 +283,7 @@ impl EventStartFile {
     }
 }
 
-impl EventProperty {
+impl Property {
     /// Wrap a raw mpv_event_property
     /// The pointer must not be null
     fn from_raw(ptr: *mut c_void) -> Self {
@@ -307,7 +307,7 @@ impl EventProperty {
     }
 }
 
-impl EventHook {
+impl Hook {
     /// Wrap a raw mpv_event_hook.
     /// The pointer must not be null
     fn from_raw(ptr: *mut c_void) -> Self {
