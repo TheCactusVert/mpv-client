@@ -1,4 +1,6 @@
-# mpv-client
+# MPV plugins in Rust
+
+Bindings for libmpv client API that allow you to create plugins for MPV in Rust.
 
 ## Example
 
@@ -32,7 +34,7 @@ extern "C" fn mpv_open_cplugin(handle: RawHandle) -> std::os::raw::c_int {
   loop {
     match mpv_handle.wait_event(-1.) {
       (_, Ok(Event::Shutdown)) => { return 0; },
-      (_, Ok(data)) => { println!("Got event: {}", data); },
+      (_, Ok(event)) => { println!("Got event: {}", event); },
       (_, _) => {},
     }
   }
