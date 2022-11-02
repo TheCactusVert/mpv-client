@@ -110,25 +110,32 @@ pub enum Event {
 
 impl fmt::Display for Event {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Self::None => write!(f, "none"),
-            Self::Shutdown => write!(f, "shutdown"),
-            Self::LogMessage => write!(f, "log_message"),
-            Self::GetPropertyReply(ref data) => write!(f, "get_property_reply({})", data),
-            Self::SetPropertyReply => write!(f, "set_property_reply"),
-            Self::CommandReply => write!(f, "command_reply"),
-            Self::StartFile(ref data) => write!(f, "start_file({})", data),
-            Self::EndFile => write!(f, "end_file"),
-            Self::FileLoaded => write!(f, "file_loaded"),
-            Self::ClientMessage => write!(f, "client_message"),
-            Self::VideoReconfig => write!(f, "video_reconfig"),
-            Self::AudioReconfig => write!(f, "audio_reconfig"),
-            Self::Seek => write!(f, "seek"),
-            Self::PlaybackRestart => write!(f, "playback_restart"),
-            Self::PropertyChange(ref data) => write!(f, "property_change({})", data),
-            Self::QueueOverflow => write!(f, "queue_overflow"),
-            Self::Hook(ref data) => write!(f, "hook({})", data),
-        }
+        let event = match *self {
+            Self::Shutdown => mpv_event_id::SHUTDOWN,
+            Self::LogMessage => mpv_event_id::LOG_MESSAGE,
+            Self::GetPropertyReply(_) => mpv_event_id::GET_PROPERTY_REPLY,
+            Self::SetPropertyReply => mpv_event_id::SET_PROPERTY_REPLY,
+            Self::CommandReply => mpv_event_id::COMMAND_REPLY,
+            Self::StartFile(_) => mpv_event_id::START_FILE,
+            Self::EndFile => mpv_event_id::END_FILE,
+            Self::FileLoaded => mpv_event_id::FILE_LOADED,
+            Self::ClientMessage => mpv_event_id::CLIENT_MESSAGE,
+            Self::VideoReconfig => mpv_event_id::VIDEO_RECONFIG,
+            Self::AudioReconfig => mpv_event_id::AUDIO_RECONFIG,
+            Self::Seek => mpv_event_id::SEEK,
+            Self::PlaybackRestart => mpv_event_id::PLAYBACK_RESTART,
+            Self::PropertyChange(_) => mpv_event_id::PROPERTY_CHANGE,
+            Self::QueueOverflow => mpv_event_id::QUEUE_OVERFLOW,
+            Self::Hook(_) => mpv_event_id::HOOK,
+            _ => mpv_event_id::NONE,
+        };
+
+        let name = unsafe {
+            CStr::from_ptr(mpv_event_name(event))
+                .to_str()
+                .unwrap_or("unknown event")
+        };
+        write!(f, "{}", name)
     }
 }
 

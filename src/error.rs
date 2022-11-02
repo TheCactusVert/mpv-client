@@ -38,11 +38,11 @@ impl std::error::Error for Error {
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let e_str = unsafe {
+        let error = unsafe {
             CStr::from_ptr(mpv_error_string(self.0))
                 .to_str()
-                .unwrap_or("unknow error")
+                .unwrap_or("unknown error")
         };
-        write!(f, "[{}] {}", self.0 as i32, e_str)
+        write!(f, "[{}] {}", self.0 as i32, error)
     }
 }

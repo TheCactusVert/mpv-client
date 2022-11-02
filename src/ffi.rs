@@ -119,12 +119,13 @@ extern "C" {
         data: *mut c_void,
     ) -> mpv_error;
     pub fn mpv_observe_property(
-        ctx: *mut mpv_handle,
+        mpv: *mut mpv_handle,
         reply_userdata: c_ulonglong,
         name: *const c_char,
         format: mpv_format,
     ) -> mpv_error;
-    pub fn mpv_unobserve_property(ctx: *mut mpv_handle, registered_reply_userdata: u64) -> mpv_error;
+    pub fn mpv_unobserve_property(mpv: *mut mpv_handle, registered_reply_userdata: u64) -> mpv_error;
+    pub fn mpv_event_name(event: mpv_event_id) -> *const c_char;
     pub fn mpv_wait_event(ctx: *mut mpv_handle, timeout: c_double) -> *mut mpv_event;
     pub fn mpv_hook_add(
         ctx: *mut mpv_handle,
