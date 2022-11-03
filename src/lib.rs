@@ -133,7 +133,7 @@ impl Handle {
     /// As long as the timeout is 0, this is safe to be called from mpv render API
     /// threads.
     pub fn wait_event(&self, timeout: f64) -> Event {
-        unsafe { Event::from_raw(mpv_wait_event(self.0, timeout)) }
+        unsafe { Event::from_ptr(mpv_wait_event(self.0, timeout)) }
     }
 
     /// Return the name of this client handle. Every client has its own unique
@@ -237,20 +237,20 @@ impl Handle {
 }
 
 impl Event {
-    unsafe fn from_raw(event: *const mpv_event) -> Event {
+    unsafe fn from_ptr(event: *const mpv_event) -> Event {
         match (*event).event_id {
             mpv_event_id::SHUTDOWN => Event::Shutdown,
             mpv_event_id::LOG_MESSAGE => Event::LogMessage,
             mpv_event_id::GET_PROPERTY_REPLY => Event::GetPropertyReply(
                 mpv_result!((*event).error),
                 (*event).reply_userdata,
-                Property::from_raw((*event).data),
+                Property::from_ptr((*event).data),
             ),
             mpv_event_id::SET_PROPERTY_REPLY => {
                 Event::SetPropertyReply(mpv_result!((*event).error), (*event).reply_userdata)
             }
             mpv_event_id::COMMAND_REPLY => Event::CommandReply(mpv_result!((*event).error), (*event).reply_userdata),
-            mpv_event_id::START_FILE => Event::StartFile(StartFile::from_raw((*event).data)),
+            mpv_event_id::START_FILE => Event::StartFile(StartFile::from_ptr((*event).data)),
             mpv_event_id::END_FILE => Event::EndFile,
             mpv_event_id::FILE_LOADED => Event::FileLoaded,
             mpv_event_id::CLIENT_MESSAGE => Event::ClientMessage,
@@ -259,10 +259,10 @@ impl Event {
             mpv_event_id::SEEK => Event::Seek,
             mpv_event_id::PLAYBACK_RESTART => Event::PlaybackRestart,
             mpv_event_id::PROPERTY_CHANGE => {
-                Event::PropertyChange((*event).reply_userdata, Property::from_raw((*event).data))
+                Event::PropertyChange((*event).reply_userdata, Property::from_ptr((*event).data))
             }
             mpv_event_id::QUEUE_OVERFLOW => Event::QueueOverflow,
-            mpv_event_id::HOOK => Event::Hook((*event).reply_userdata, Hook::from_raw((*event).data)),
+            mpv_event_id::HOOK => Event::Hook((*event).reply_userdata, Hook::from_ptr((*event).data)),
             _ => Event::None,
         }
     }
@@ -302,7 +302,7 @@ impl fmt::Display for Event {
 impl StartFile {
     /// Wrap a raw mpv_event_start_file
     /// The pointer must not be null
-    fn from_raw(ptr: *mut c_void) -> Self {
+    fn from_ptr(ptr: *mut c_void) -> Self {
         assert!(!ptr.is_null());
         Self(ptr as *mut mpv_event_start_file)
     }
@@ -322,7 +322,7 @@ impl fmt::Display for StartFile {
 impl Property {
     /// Wrap a raw mpv_event_property
     /// The pointer must not be null
-    fn from_raw(ptr: *mut c_void) -> Self {
+    fn from_ptr(ptr: *mut c_void) -> Self {
         assert!(!ptr.is_null());
         Self(ptr as *mut mpv_event_property)
     }
@@ -335,7 +335,7 @@ impl Property {
     pub fn data<T: Format>(&self) -> Option<T> {
         unsafe {
             if (*self.0).format == T::FORMAT {
-                T::from_raw((*self.0).data).ok()
+                T::from_ptr((*self.0).data).ok()
             } else {
                 None
             }
@@ -352,7 +352,7 @@ impl fmt::Display for Property {
 impl Hook {
     /// Wrap a raw mpv_event_hook.
     /// The pointer must not be null
-    fn from_raw(ptr: *mut c_void) -> Self {
+    fn from_ptr(ptr: *mut c_void) -> Self {
         assert!(!ptr.is_null());
         Self(ptr as *mut mpv_event_hook)
     }

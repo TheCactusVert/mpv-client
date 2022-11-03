@@ -5,7 +5,7 @@ use std::ffi::{c_char, c_void, CStr, CString};
 
 pub trait Format: Sized + Default {
     const FORMAT: mpv_format;
-    fn from_raw(ptr: *mut c_void) -> Result<Self>;
+    fn from_ptr(ptr: *mut c_void) -> Result<Self>;
     fn to_mpv<F: Fn(*const c_void) -> Result<()>>(self, fun: F) -> Result<()>;
     fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self>;
 }
@@ -13,7 +13,7 @@ pub trait Format: Sized + Default {
 impl Format for f64 {
     const FORMAT: mpv_format = mpv_format::DOUBLE;
 
-    fn from_raw(ptr: *mut c_void) -> Result<Self> {
+    fn from_ptr(ptr: *mut c_void) -> Result<Self> {
         Ok(unsafe { *(ptr as *mut Self) })
     }
 
@@ -31,7 +31,7 @@ impl Format for f64 {
 impl Format for i64 {
     const FORMAT: mpv_format = mpv_format::INT64;
 
-    fn from_raw(ptr: *mut c_void) -> Result<Self> {
+    fn from_ptr(ptr: *mut c_void) -> Result<Self> {
         Ok(unsafe { *(ptr as *mut Self) })
     }
 
@@ -49,7 +49,7 @@ impl Format for i64 {
 impl Format for String {
     const FORMAT: mpv_format = mpv_format::STRING;
 
-    fn from_raw(ptr: *mut c_void) -> Result<Self> {
+    fn from_ptr(ptr: *mut c_void) -> Result<Self> {
         Ok(unsafe { CString::from_raw(ptr as *mut i8) }.to_str()?.to_string())
     }
 
