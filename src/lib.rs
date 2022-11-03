@@ -11,7 +11,7 @@ use std::fmt;
 use std::time::Duration;
 
 /// Raw client context.
-pub type RawHandle = *mut mpv_handle;
+pub use ffi::mpv_handle;
 
 /// Client context used by the client API. Every client has its own private handle.
 pub struct Handle(*mut mpv_handle);
@@ -89,13 +89,13 @@ pub enum Event {
 }
 
 /// Data associated with `Event::StartFile`.
-pub struct StartFile(*mut mpv_event_start_file);
+pub struct StartFile(*const mpv_event_start_file);
 
 /// Data associated with `Event::GetPropertyReply` and `Event::PropertyChange`.
-pub struct Property(*mut mpv_event_property);
+pub struct Property(*const mpv_event_property);
 
 /// Data associated with `Event::Hook`.
-pub struct Hook(*mut mpv_event_hook);
+pub struct Hook(*const mpv_event_hook);
 
 macro_rules! mpv_result {
     ($f:expr) => {
@@ -109,7 +109,7 @@ macro_rules! mpv_result {
 impl Handle {
     /// Wrap a raw mpv_handle
     /// The pointer must not be null
-    pub fn from_ptr(ptr: RawHandle) -> Self {
+    pub fn from_ptr(ptr: *mut mpv_handle) -> Self {
         assert!(!ptr.is_null());
         Self(ptr)
     }
@@ -302,9 +302,9 @@ impl fmt::Display for Event {
 impl StartFile {
     /// Wrap a raw mpv_event_start_file
     /// The pointer must not be null
-    fn from_ptr(ptr: *mut c_void) -> Self {
+    fn from_ptr(ptr: *const c_void) -> Self {
         assert!(!ptr.is_null());
-        Self(ptr as *mut mpv_event_start_file)
+        Self(ptr as *const mpv_event_start_file)
     }
 
     /// Playlist entry ID of the file being loaded now.
@@ -322,9 +322,9 @@ impl fmt::Display for StartFile {
 impl Property {
     /// Wrap a raw mpv_event_property
     /// The pointer must not be null
-    fn from_ptr(ptr: *mut c_void) -> Self {
+    fn from_ptr(ptr: *const c_void) -> Self {
         assert!(!ptr.is_null());
-        Self(ptr as *mut mpv_event_property)
+        Self(ptr as *const mpv_event_property)
     }
 
     /// Name of the property.
@@ -352,9 +352,9 @@ impl fmt::Display for Property {
 impl Hook {
     /// Wrap a raw mpv_event_hook.
     /// The pointer must not be null
-    fn from_ptr(ptr: *mut c_void) -> Self {
+    fn from_ptr(ptr: *const c_void) -> Self {
         assert!(!ptr.is_null());
-        Self(ptr as *mut mpv_event_hook)
+        Self(ptr as *const mpv_event_hook)
     }
 
     /// The hook name as passed to `Handle::hook_add`.

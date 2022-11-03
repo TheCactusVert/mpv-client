@@ -23,10 +23,10 @@ mpv-client = "0.3.0"
 And then the code `src/lib.rs`:
 
 ```rust
-use mpv_client::{Event, Handle, RawHandle};
+use mpv_client::{mpv_handle, Event, Handle};
 
 #[no_mangle]
-extern "C" fn mpv_open_cplugin(handle: RawHandle) -> std::os::raw::c_int {
+extern "C" fn mpv_open_cplugin(handle: *mut mpv_handle) -> std::os::raw::c_int {
   let mpv_handle = Handle::from_ptr(handle);
   
   println!("Hello world from Rust plugin {}!", mpv_handle.client_name());
