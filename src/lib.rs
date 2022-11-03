@@ -133,15 +133,7 @@ impl Handle {
     /// As long as the timeout is 0, this is safe to be called from mpv render API
     /// threads.
     pub fn wait_event(&self, timeout: f64) -> Event {
-        unsafe {
-            let event = mpv_wait_event(self.0, timeout);
-
-            if event.is_null() {
-                Event::None
-            } else {
-                Event::from_raw(event)
-            }
-        }
+        unsafe { Event::from_raw(mpv_wait_event(self.0, timeout)) }
     }
 
     /// Return the name of this client handle. Every client has its own unique
