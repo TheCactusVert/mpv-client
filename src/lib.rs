@@ -16,26 +16,6 @@ pub type RawHandle = *mut mpv_handle;
 /// Client context used by the client API. Every client has its own private handle.
 pub struct Handle(*mut mpv_handle);
 
-/// Data associated with `Event::StartFile`.
-pub struct StartFile(*mut mpv_event_start_file);
-
-/// Data associated with `Event::GetPropertyReply` and `Event::PropertyChange`.
-pub struct Property(*mut mpv_event_property);
-
-/// Data associated with `Event::Hook`.
-pub struct Hook(*mut mpv_event_hook);
-
-macro_rules! mpv_result {
-    ($f:expr) => {
-        unsafe {
-            match $f {
-                mpv_error::SUCCESS => Ok(()),
-                e => Err(Error::new(e)),
-            }
-        }
-    };
-}
-
 /// An enum representing the available events that can be received by
 /// `Handle::wait_event`.
 pub enum Event {
@@ -48,13 +28,13 @@ pub enum Event {
     LogMessage, // TODO mpv_event_log_message
     /// Reply to a `Handle::get_property_async` request.
     /// See also `Property`.
-    GetPropertyReply(Property),
+    GetPropertyReply(Result<()>, u64, Property),
     /// Reply to a `Handle::set_property_async` request.
     /// (Unlike `GetPropertyReply`, `Property` is not used.)
-    SetPropertyReply,
+    SetPropertyReply(Result<()>, u64),
     /// Reply to a `Handle::command_async` or mpv_command_node_async() request.
     /// See also `Command`.
-    CommandReply, // TODO mpv_event_command
+    CommandReply(Result<()>, u64), // TODO mpv_event_command
     /// Notification before playback start of a file (before the file is loaded).
     /// See also `StartFile`.
     StartFile(StartFile),
@@ -90,9 +70,9 @@ pub enum Event {
     /// seeking. The main purpose is allowing the client to detect when a seek
     /// request is finished.
     PlaybackRestart,
-    /// Event sent due to mpv_observe_property().
+    /// Event sent due to `mpv_observe_property()`.
     /// See also `Property`.
-    PropertyChange(Property),
+    PropertyChange(u64, Property),
     /// Happens if the internal per-mpv_handle ringbuffer overflows, and at
     /// least 1 event had to be dropped. This can happen if the client doesn't
     /// read the event queue quickly enough with `Handle::wait_event`, or if the
@@ -104,39 +84,26 @@ pub enum Event {
     /// Triggered if a hook handler was registered with `Handle::hook_add`, and the
     /// hook is invoked. If you receive this, you must handle it, and continue
     /// the hook with `Handle::hook_continue`.
-    /// See also `EventHook`.
-    Hook(Hook),
+    /// See also `Hook`.
+    Hook(u64, Hook),
 }
 
-impl fmt::Display for Event {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let event = match *self {
-            Self::Shutdown => mpv_event_id::SHUTDOWN,
-            Self::LogMessage => mpv_event_id::LOG_MESSAGE,
-            Self::GetPropertyReply(_) => mpv_event_id::GET_PROPERTY_REPLY,
-            Self::SetPropertyReply => mpv_event_id::SET_PROPERTY_REPLY,
-            Self::CommandReply => mpv_event_id::COMMAND_REPLY,
-            Self::StartFile(_) => mpv_event_id::START_FILE,
-            Self::EndFile => mpv_event_id::END_FILE,
-            Self::FileLoaded => mpv_event_id::FILE_LOADED,
-            Self::ClientMessage => mpv_event_id::CLIENT_MESSAGE,
-            Self::VideoReconfig => mpv_event_id::VIDEO_RECONFIG,
-            Self::AudioReconfig => mpv_event_id::AUDIO_RECONFIG,
-            Self::Seek => mpv_event_id::SEEK,
-            Self::PlaybackRestart => mpv_event_id::PLAYBACK_RESTART,
-            Self::PropertyChange(_) => mpv_event_id::PROPERTY_CHANGE,
-            Self::QueueOverflow => mpv_event_id::QUEUE_OVERFLOW,
-            Self::Hook(_) => mpv_event_id::HOOK,
-            _ => mpv_event_id::NONE,
-        };
+/// Data associated with `Event::StartFile`.
+pub struct StartFile(*mut mpv_event_start_file);
 
-        let name = unsafe {
-            CStr::from_ptr(mpv_event_name(event))
-                .to_str()
-                .unwrap_or("unknown event")
-        };
-        write!(f, "{}", name)
-    }
+/// Data associated with `Event::GetPropertyReply` and `Event::PropertyChange`.
+pub struct Property(*mut mpv_event_property);
+
+/// Data associated with `Event::Hook`.
+pub struct Hook(*mut mpv_event_hook);
+
+macro_rules! mpv_result {
+    ($f:expr) => {
+        match $f {
+            mpv_error::SUCCESS => Ok(()),
+            e => Err(Error::new(e)),
+        }
+    };
 }
 
 impl Handle {
@@ -145,28 +112,6 @@ impl Handle {
     pub fn from_ptr(ptr: RawHandle) -> Self {
         assert!(!ptr.is_null());
         Self(ptr)
-    }
-
-    fn upcast_event(event_id: mpv_event_id, data: *mut c_void) -> Event {
-        match event_id {
-            mpv_event_id::SHUTDOWN => Event::Shutdown,
-            mpv_event_id::LOG_MESSAGE => Event::LogMessage,
-            mpv_event_id::GET_PROPERTY_REPLY => Event::GetPropertyReply(Property::from_raw(data)),
-            mpv_event_id::SET_PROPERTY_REPLY => Event::SetPropertyReply,
-            mpv_event_id::COMMAND_REPLY => Event::CommandReply,
-            mpv_event_id::START_FILE => Event::StartFile(StartFile::from_raw(data)),
-            mpv_event_id::END_FILE => Event::EndFile,
-            mpv_event_id::FILE_LOADED => Event::FileLoaded,
-            mpv_event_id::CLIENT_MESSAGE => Event::ClientMessage,
-            mpv_event_id::VIDEO_RECONFIG => Event::VideoReconfig,
-            mpv_event_id::AUDIO_RECONFIG => Event::AudioReconfig,
-            mpv_event_id::SEEK => Event::Seek,
-            mpv_event_id::PLAYBACK_RESTART => Event::PlaybackRestart,
-            mpv_event_id::PROPERTY_CHANGE => Event::PropertyChange(Property::from_raw(data)),
-            mpv_event_id::QUEUE_OVERFLOW => Event::QueueOverflow,
-            mpv_event_id::HOOK => Event::Hook(Hook::from_raw(data)),
-            _ => Event::None,
-        }
     }
 
     /// Wait for the next event, or until the timeout expires, or if another thread
@@ -187,22 +132,14 @@ impl Handle {
     ///
     /// As long as the timeout is 0, this is safe to be called from mpv render API
     /// threads.
-    pub fn wait_event(&self, timeout: f64) -> (u64, Result<Event>) {
+    pub fn wait_event(&self, timeout: f64) -> Event {
         unsafe {
             let event = mpv_wait_event(self.0, timeout);
 
             if event.is_null() {
-                // TODO is it possible ?
-                let reply = 0;
-                let event = Ok(Event::None);
-                (reply, event)
+                Event::None
             } else {
-                let reply = (*event).reply_userdata;
-                let event = match (*event).error {
-                    mpv_error::SUCCESS => Ok(Self::upcast_event((*event).event_id, (*event).data)),
-                    _ => Err(Error::new((*event).error)),
-                };
-                (reply, event)
+                Event::from_raw(event)
             }
         }
     }
@@ -218,24 +155,59 @@ impl Handle {
     /// Send a command to the player. Commands are the same as those used in
     /// input.conf, except that this function takes parameters in a pre-split
     /// form.
-    pub fn command(&self, args: &[String]) -> Result<()> {
-        let c_args = args
-            .iter()
-            .map(|s| CString::new::<String>(s.into()).unwrap())
-            .collect::<Vec<CString>>();
-        let mut raw_args = c_args.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
-        raw_args.push(std::ptr::null::<i8>()); // Adding null at the end
-        mpv_result!(mpv_command(self.0, raw_args.as_ptr()))
+    pub fn command<I, S>(&self, args: I) -> Result<()>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let args: Vec<CString> = args.into_iter().map(|s| CString::new(s.as_ref()).unwrap()).collect();
+        let mut raw_args: Vec<*const i8> = args.iter().map(|s| s.as_ptr()).collect();
+        raw_args.push(std::ptr::null()); // Adding null at the end
+        unsafe { mpv_result!(mpv_command(self.0, raw_args.as_ptr())) }
+    }
+
+    /// Same as `Handle::command`, but run the command asynchronously.
+    ///
+    /// Commands are executed asynchronously. You will receive a
+    /// `CommandReply` event. This event will also have an
+    /// error code set if running the command failed. For commands that
+    /// return data, the data is put into mpv_event_command.result.
+    ///
+    /// The only case when you do not receive an event is when the function call
+    /// itself fails. This happens only if parsing the command itself (or otherwise
+    /// validating it) fails, i.e. the return code of the API call is not 0 or
+    /// positive.
+    ///
+    /// Safe to be called from mpv render API threads.
+    pub fn command_async<I, S>(&self, reply_userdata: u64, args: I) -> Result<()>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let args: Vec<CString> = args.into_iter().map(|s| CString::new(s.as_ref()).unwrap()).collect();
+        let mut raw_args: Vec<*const i8> = args.iter().map(|s| s.as_ptr()).collect();
+        raw_args.push(std::ptr::null()); // Adding null at the end
+        unsafe { mpv_result!(mpv_command_async(self.0, reply_userdata, raw_args.as_ptr())) }
     }
 
     /// Display a message on the screen.
-    pub fn osd_message(&self, text: String, duration: Duration) -> Result<()> {
-        self.command(&["show-text".to_string(), text, duration.as_millis().to_string()])
+    /// See `Handle::command`
+    pub fn osd_message<S: AsRef<str>>(&self, text: S, duration: Duration) -> Result<()> {
+        self.command(&["show-text", text.as_ref(), &duration.as_millis().to_string()])
+    }
+
+    /// Same as `Handle::osd_command`, but run the command asynchronously.
+    /// See `Handle::command_async`
+    pub fn osd_message_async<S: AsRef<str>>(&self, reply_userdata: u64, text: S, duration: Duration) -> Result<()> {
+        self.command_async(
+            reply_userdata,
+            &["show-text", text.as_ref(), &duration.as_millis().to_string()],
+        )
     }
 
     pub fn set_property<T: Format>(&self, name: &str, data: T) -> Result<()> {
         let name = CString::new(name)?;
-        data.to_mpv(|data| mpv_result!(mpv_set_property(self.0, name.as_ptr(), T::FORMAT, data)))
+        data.to_mpv(|data| unsafe { mpv_result!(mpv_set_property(self.0, name.as_ptr(), T::FORMAT, data)) })
     }
 
     /// Read the value of the given property.
@@ -246,12 +218,12 @@ impl Handle {
     /// converted to f64, and access using String usually invokes a string formatter.
     pub fn get_property<T: Format>(&self, name: &str) -> Result<T> {
         let name = CString::new(name)?;
-        T::from_mpv(|data| mpv_result!(mpv_get_property(self.0, name.as_ptr(), T::FORMAT, data)))
+        T::from_mpv(|data| unsafe { mpv_result!(mpv_get_property(self.0, name.as_ptr(), T::FORMAT, data)) })
     }
 
     pub fn observe_property<T: Format>(&self, reply_userdata: u64, name: &str) -> Result<()> {
         let name = CString::new(name)?;
-        mpv_result!(mpv_observe_property(self.0, reply_userdata, name.as_ptr(), T::FORMAT))
+        unsafe { mpv_result!(mpv_observe_property(self.0, reply_userdata, name.as_ptr(), T::FORMAT)) }
     }
 
     /// Undo `Handle::observe_property`. This will remove all observed properties for
@@ -259,16 +231,79 @@ impl Handle {
     ///
     /// Safe to be called from mpv render API threads.
     pub fn unobserve_property(&self, registered_reply_userdata: u64) -> Result<()> {
-        mpv_result!(mpv_unobserve_property(self.0, registered_reply_userdata))
+        unsafe { mpv_result!(mpv_unobserve_property(self.0, registered_reply_userdata)) }
     }
 
     pub fn hook_add(&self, reply_userdata: u64, name: &str, priority: i32) -> Result<()> {
         let name = CString::new(name)?;
-        mpv_result!(mpv_hook_add(self.0, reply_userdata, name.as_ptr(), priority))
+        unsafe { mpv_result!(mpv_hook_add(self.0, reply_userdata, name.as_ptr(), priority)) }
     }
 
     pub fn hook_continue(&self, id: u64) -> Result<()> {
-        mpv_result!(mpv_hook_continue(self.0, id))
+        unsafe { mpv_result!(mpv_hook_continue(self.0, id)) }
+    }
+}
+
+impl Event {
+    unsafe fn from_raw(event: *const mpv_event) -> Event {
+        match (*event).event_id {
+            mpv_event_id::SHUTDOWN => Event::Shutdown,
+            mpv_event_id::LOG_MESSAGE => Event::LogMessage,
+            mpv_event_id::GET_PROPERTY_REPLY => Event::GetPropertyReply(
+                mpv_result!((*event).error),
+                (*event).reply_userdata,
+                Property::from_raw((*event).data),
+            ),
+            mpv_event_id::SET_PROPERTY_REPLY => {
+                Event::SetPropertyReply(mpv_result!((*event).error), (*event).reply_userdata)
+            }
+            mpv_event_id::COMMAND_REPLY => Event::CommandReply(mpv_result!((*event).error), (*event).reply_userdata),
+            mpv_event_id::START_FILE => Event::StartFile(StartFile::from_raw((*event).data)),
+            mpv_event_id::END_FILE => Event::EndFile,
+            mpv_event_id::FILE_LOADED => Event::FileLoaded,
+            mpv_event_id::CLIENT_MESSAGE => Event::ClientMessage,
+            mpv_event_id::VIDEO_RECONFIG => Event::VideoReconfig,
+            mpv_event_id::AUDIO_RECONFIG => Event::AudioReconfig,
+            mpv_event_id::SEEK => Event::Seek,
+            mpv_event_id::PLAYBACK_RESTART => Event::PlaybackRestart,
+            mpv_event_id::PROPERTY_CHANGE => {
+                Event::PropertyChange((*event).reply_userdata, Property::from_raw((*event).data))
+            }
+            mpv_event_id::QUEUE_OVERFLOW => Event::QueueOverflow,
+            mpv_event_id::HOOK => Event::Hook((*event).reply_userdata, Hook::from_raw((*event).data)),
+            _ => Event::None,
+        }
+    }
+}
+
+impl fmt::Display for Event {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let event = match *self {
+            Self::Shutdown => mpv_event_id::SHUTDOWN,
+            Self::LogMessage => mpv_event_id::LOG_MESSAGE,
+            Self::GetPropertyReply(..) => mpv_event_id::GET_PROPERTY_REPLY,
+            Self::SetPropertyReply(..) => mpv_event_id::SET_PROPERTY_REPLY,
+            Self::CommandReply(..) => mpv_event_id::COMMAND_REPLY,
+            Self::StartFile(..) => mpv_event_id::START_FILE,
+            Self::EndFile => mpv_event_id::END_FILE,
+            Self::FileLoaded => mpv_event_id::FILE_LOADED,
+            Self::ClientMessage => mpv_event_id::CLIENT_MESSAGE,
+            Self::VideoReconfig => mpv_event_id::VIDEO_RECONFIG,
+            Self::AudioReconfig => mpv_event_id::AUDIO_RECONFIG,
+            Self::Seek => mpv_event_id::SEEK,
+            Self::PlaybackRestart => mpv_event_id::PLAYBACK_RESTART,
+            Self::PropertyChange(..) => mpv_event_id::PROPERTY_CHANGE,
+            Self::QueueOverflow => mpv_event_id::QUEUE_OVERFLOW,
+            Self::Hook(..) => mpv_event_id::HOOK,
+            _ => mpv_event_id::NONE,
+        };
+
+        let name = unsafe {
+            CStr::from_ptr(mpv_event_name(event))
+                .to_str()
+                .unwrap_or("unknown event")
+        };
+        write!(f, "{}", name)
     }
 }
 

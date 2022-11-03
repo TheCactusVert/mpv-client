@@ -106,6 +106,7 @@ extern "C" {
     pub fn mpv_free(data: *mut c_void);
     pub fn mpv_client_name(ctx: *mut mpv_handle) -> *const c_char;
     pub fn mpv_command(ctx: *mut mpv_handle, args: *const *const c_char) -> mpv_error;
+    pub fn mpv_command_async(ctx: *mut mpv_handle, reply_userdata: u64, args: *const *const c_char) -> mpv_error;
     pub fn mpv_set_property(
         ctx: *mut mpv_handle,
         name: *const c_char,

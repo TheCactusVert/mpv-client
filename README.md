@@ -33,9 +33,8 @@ extern "C" fn mpv_open_cplugin(handle: RawHandle) -> std::os::raw::c_int {
   
   loop {
     match mpv_handle.wait_event(-1.) {
-      (_, Ok(Event::Shutdown)) => { return 0; },
-      (_, Ok(event)) => { println!("Got event: {}", event); },
-      (_, _) => {},
+      Event::Shutdown => { return 0; },
+      event => { println!("Got event: {}", event); },
     }
   }
 }
