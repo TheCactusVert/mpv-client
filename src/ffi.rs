@@ -68,6 +68,7 @@ pub enum mpv_event_id {
     HOOK = 25,
 }
 
+/// Raw client context.
 #[allow(non_camel_case_types)]
 pub type mpv_handle = c_void;
 

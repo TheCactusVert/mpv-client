@@ -10,7 +10,6 @@ use std::ffi::{c_void, CStr, CString};
 use std::fmt;
 use std::time::Duration;
 
-/// Raw client context.
 pub use ffi::mpv_handle;
 
 /// Client context used by the client API. Every client has its own private handle.
