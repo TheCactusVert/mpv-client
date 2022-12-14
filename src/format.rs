@@ -55,7 +55,7 @@ impl Format for String {
 
     fn to_mpv<F: Fn(*const c_void) -> Result<()>>(self, fun: F) -> Result<()> {
         let str = CString::new::<String>(self.into())?;
-        fun(str.as_ptr() as *const c_void)
+        fun(&str.as_ptr() as *const *const i8 as *const c_void)
     }
 
     fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
