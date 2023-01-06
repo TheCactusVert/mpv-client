@@ -48,7 +48,7 @@ pub enum Event {
     /// dispatch the message, and passes along all arguments starting from the
     /// second argument as strings.
     /// See also `ClientMessage`.
-    ClientMessage, // TODO mpv_event_client_message
+    ClientMessage(ClientMessage),
     /// Happens after video changed in some way. This can happen on resolution
     /// changes, pixel format changes, or video filter changes. The event is
     /// sent after the video filters and the VO are reconfigured. Applications
@@ -87,11 +87,14 @@ pub enum Event {
     Hook(u64, Hook),
 }
 
+/// Data associated with `Event::GetPropertyReply` and `Event::PropertyChange`.
+pub struct Property(*const mpv_event_property);
+
 /// Data associated with `Event::StartFile`.
 pub struct StartFile(*const mpv_event_start_file);
 
-/// Data associated with `Event::GetPropertyReply` and `Event::PropertyChange`.
-pub struct Property(*const mpv_event_property);
+/// Data associated with `Event::ClientMessage`.
+pub struct ClientMessage(*const mpv_event_client_message);
 
 /// Data associated with `Event::Hook`.
 pub struct Hook(*const mpv_event_hook);
@@ -252,7 +255,7 @@ impl Event {
             mpv_event_id::START_FILE => Event::StartFile(StartFile::from_ptr((*event).data)),
             mpv_event_id::END_FILE => Event::EndFile,
             mpv_event_id::FILE_LOADED => Event::FileLoaded,
-            mpv_event_id::CLIENT_MESSAGE => Event::ClientMessage,
+            mpv_event_id::CLIENT_MESSAGE => Event::ClientMessage(ClientMessage::from_ptr((*event).data)),
             mpv_event_id::VIDEO_RECONFIG => Event::VideoReconfig,
             mpv_event_id::AUDIO_RECONFIG => Event::AudioReconfig,
             mpv_event_id::SEEK => Event::Seek,
@@ -278,7 +281,7 @@ impl fmt::Display for Event {
             Self::StartFile(..) => mpv_event_id::START_FILE,
             Self::EndFile => mpv_event_id::END_FILE,
             Self::FileLoaded => mpv_event_id::FILE_LOADED,
-            Self::ClientMessage => mpv_event_id::CLIENT_MESSAGE,
+            Self::ClientMessage(..) => mpv_event_id::CLIENT_MESSAGE,
             Self::VideoReconfig => mpv_event_id::VIDEO_RECONFIG,
             Self::AudioReconfig => mpv_event_id::AUDIO_RECONFIG,
             Self::Seek => mpv_event_id::SEEK,
@@ -295,26 +298,6 @@ impl fmt::Display for Event {
                 .unwrap_or("unknown event")
         };
         write!(f, "{}", name)
-    }
-}
-
-impl StartFile {
-    /// Wrap a raw mpv_event_start_file
-    /// The pointer must not be null
-    fn from_ptr(ptr: *const c_void) -> Self {
-        assert!(!ptr.is_null());
-        Self(ptr as *const mpv_event_start_file)
-    }
-
-    /// Playlist entry ID of the file being loaded now.
-    pub fn playlist_entry_id(&self) -> u64 {
-        unsafe { (*self.0).playlist_entry_id }
-    }
-}
-
-impl fmt::Display for StartFile {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.playlist_entry_id())
     }
 }
 
@@ -345,6 +328,50 @@ impl Property {
 impl fmt::Display for Property {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name())
+    }
+}
+
+impl StartFile {
+    /// Wrap a raw mpv_event_start_file
+    /// The pointer must not be null
+    fn from_ptr(ptr: *const c_void) -> Self {
+        assert!(!ptr.is_null());
+        Self(ptr as *const mpv_event_start_file)
+    }
+
+    /// Playlist entry ID of the file being loaded now.
+    pub fn playlist_entry_id(&self) -> u64 {
+        unsafe { (*self.0).playlist_entry_id }
+    }
+}
+
+impl fmt::Display for StartFile {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.playlist_entry_id())
+    }
+}
+
+impl ClientMessage {
+    /// Wrap a raw mpv_event_client_message.
+    /// The pointer must not be null
+    fn from_ptr(ptr: *const c_void) -> Self {
+        assert!(!ptr.is_null());
+        Self(ptr as *const mpv_event_client_message)
+    }
+
+    pub fn args(&self) -> Vec<String> {
+        unsafe {
+            let args = std::slice::from_raw_parts((*self.0).args, (*self.0).num_args as usize);
+            args.into_iter()
+                .map(|arg| CStr::from_ptr(*arg).to_str().unwrap().to_string())
+                .collect()
+        }
+    }
+}
+
+impl fmt::Display for ClientMessage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "client-message")
     }
 }
 
