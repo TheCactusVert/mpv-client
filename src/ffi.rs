@@ -32,22 +32,6 @@ pub enum mpv_error {
 #[allow(dead_code)]
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone, PartialEq)]
-pub enum mpv_format {
-    NONE = 0,
-    STRING = 1,
-    OSD_STRING = 2,
-    FLAG = 3,
-    INT64 = 4,
-    DOUBLE = 5,
-    NODE_ARRAY = 7,
-    NODE_MAP = 8,
-    BYTE_ARRAY = 9,
-}
-
-#[repr(i32)]
-#[allow(dead_code)]
-#[allow(non_camel_case_types)]
-#[derive(Copy, Clone, PartialEq)]
 pub enum mpv_event_id {
     NONE = 0,
     SHUTDOWN = 1,
@@ -76,7 +60,7 @@ pub type mpv_handle = c_void;
 #[allow(non_camel_case_types)]
 pub struct mpv_event_property {
     pub name: *const c_char,
-    pub format: mpv_format,
+    pub format: i32,
     pub data: *mut c_void,
 }
 
@@ -114,27 +98,29 @@ extern "C" {
     pub fn mpv_free(data: *mut c_void);
     pub fn mpv_client_name(ctx: *mut mpv_handle) -> *const c_char;
     pub fn mpv_client_id(ctx: *mut mpv_handle) -> c_longlong;
+    pub fn mpv_create() -> *mut mpv_handle;
+    pub fn mpv_initialize(ctx: *mut mpv_handle) -> mpv_error;
+    pub fn mpv_destroy(ctx: *mut mpv_handle);
+    //pub fn mpv_terminate_destroy(ctx: *mut mpv_handle);
+    pub fn mpv_create_client(ctx: *mut mpv_handle, name: *const c_char) -> *mut mpv_handle;
+    pub fn mpv_create_weak_client(ctx: *mut mpv_handle, name: *const c_char) -> *mut mpv_handle;
+    //pub fn mpv_load_config_file(ctx: *mut mpv_handle, filename: *const c_char) -> mpv_error;
     pub fn mpv_command(ctx: *mut mpv_handle, args: *const *const c_char) -> mpv_error;
-    pub fn mpv_command_async(ctx: *mut mpv_handle, reply_userdata: u64, args: *const *const c_char) -> mpv_error;
-    pub fn mpv_set_property(
+    pub fn mpv_command_async(
         ctx: *mut mpv_handle,
-        name: *const c_char,
-        format: mpv_format,
-        data: *const c_void,
+        reply_userdata: c_ulonglong,
+        args: *const *const c_char,
     ) -> mpv_error;
-    pub fn mpv_get_property(
-        ctx: *mut mpv_handle,
-        name: *const c_char,
-        format: mpv_format,
-        data: *mut c_void,
-    ) -> mpv_error;
+    pub fn mpv_set_property(ctx: *mut mpv_handle, name: *const c_char, format: c_int, data: *const c_void)
+        -> mpv_error;
+    pub fn mpv_get_property(ctx: *mut mpv_handle, name: *const c_char, format: c_int, data: *mut c_void) -> mpv_error;
     pub fn mpv_observe_property(
         mpv: *mut mpv_handle,
         reply_userdata: c_ulonglong,
         name: *const c_char,
-        format: mpv_format,
+        format: c_int,
     ) -> mpv_error;
-    pub fn mpv_unobserve_property(mpv: *mut mpv_handle, registered_reply_userdata: u64) -> mpv_error;
+    pub fn mpv_unobserve_property(mpv: *mut mpv_handle, registered_reply_userdata: c_ulonglong) -> mpv_error;
     pub fn mpv_event_name(event: mpv_event_id) -> *const c_char;
     pub fn mpv_wait_event(ctx: *mut mpv_handle, timeout: c_double) -> *mut mpv_event;
     pub fn mpv_hook_add(

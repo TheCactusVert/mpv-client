@@ -4,7 +4,7 @@ mod format;
 
 use error::{Error, Result};
 use ffi::*;
-use format::Format;
+pub use format::Format;
 
 use std::ffi::{c_void, CStr, CString};
 use std::fmt;
@@ -13,7 +13,7 @@ use std::time::Duration;
 pub use ffi::mpv_handle;
 
 /// Client context used by the client API. Every client has its own private handle.
-pub struct Handle(*mut mpv_handle);
+pub struct Handle(*mut mpv_handle, bool);
 
 /// An enum representing the available events that can be received by
 /// `Handle::wait_event`.
@@ -113,7 +113,35 @@ impl Handle {
     /// The pointer must not be null
     pub fn from_ptr(ptr: *mut mpv_handle) -> Self {
         assert!(!ptr.is_null());
-        Self(ptr)
+        Self(ptr, false)
+    }
+
+    pub fn create_uninitialized() -> Self {
+        unsafe { Self(mpv_create(), true) }
+    }
+
+    pub fn create_client<S: AsRef<str>>(&self, name: S) -> Result<Self> {
+        let name = CString::new(name.as_ref())?;
+        let client = unsafe { mpv_create_client(self.0, name.as_ptr()) };
+        if client.is_null() {
+            Err(Error::new(mpv_error::GENERIC))
+        } else {
+            Ok(Self(client, true))
+        }
+    }
+
+    pub fn create_weak_client<S: AsRef<str>>(&self, name: S) -> Result<Self> {
+        let name = CString::new(name.as_ref())?;
+        let client = unsafe { mpv_create_weak_client(self.0, name.as_ptr()) };
+        if client.is_null() {
+            Err(Error::new(mpv_error::GENERIC))
+        } else {
+            Ok(Self(client, true))
+        }
+    }
+
+    pub fn initialize(&self) -> Result<()> {
+        unsafe { mpv_result!(mpv_initialize(self.0)) }
     }
 
     /// Wait for the next event, or until the timeout expires, or if another thread
@@ -201,9 +229,9 @@ impl Handle {
         )
     }
 
-    pub fn set_property<T: Format>(&self, name: &str, data: T) -> Result<()> {
-        let name = CString::new(name)?;
-        data.to_mpv(|data| unsafe { mpv_result!(mpv_set_property(self.0, name.as_ptr(), T::FORMAT, data)) })
+    pub fn set_property<T: Format, S: AsRef<str>>(&self, name: S, data: T) -> Result<()> {
+        let name = CString::new(name.as_ref())?;
+        data.to_mpv(|data| unsafe { mpv_result!(mpv_set_property(self.0, name.as_ptr(), T::MPV_FORMAT, data)) })
     }
 
     /// Read the value of the given property.
@@ -212,14 +240,14 @@ impl Handle {
     /// usually will fail with `MPV_ERROR_PROPERTY_FORMAT`. In some cases, the data
     /// is automatically converted and access succeeds. For example, i64 is always
     /// converted to f64, and access using String usually invokes a string formatter.
-    pub fn get_property<T: Format>(&self, name: &str) -> Result<T> {
-        let name = CString::new(name)?;
-        T::from_mpv(|data| unsafe { mpv_result!(mpv_get_property(self.0, name.as_ptr(), T::FORMAT, data)) })
+    pub fn get_property<T: Format, S: AsRef<str>>(&self, name: S) -> Result<T> {
+        let name = CString::new(name.as_ref())?;
+        T::from_mpv(|data| unsafe { mpv_result!(mpv_get_property(self.0, name.as_ptr(), T::MPV_FORMAT, data)) })
     }
 
-    pub fn observe_property<T: Format>(&self, reply_userdata: u64, name: &str) -> Result<()> {
-        let name = CString::new(name)?;
-        unsafe { mpv_result!(mpv_observe_property(self.0, reply_userdata, name.as_ptr(), T::FORMAT)) }
+    pub fn observe_property<S: AsRef<str>>(&self, reply_userdata: u64, name: S, format: i32) -> Result<()> {
+        let name = CString::new(name.as_ref())?;
+        unsafe { mpv_result!(mpv_observe_property(self.0, reply_userdata, name.as_ptr(), format)) }
     }
 
     /// Undo `Handle::observe_property`. This will remove all observed properties for
@@ -239,6 +267,16 @@ impl Handle {
         unsafe { mpv_result!(mpv_hook_continue(self.0, id)) }
     }
 }
+
+impl Drop for Handle {
+    fn drop(&mut self) {
+        if self.1 {
+            unsafe { mpv_destroy(self.0) }
+        }
+    }
+}
+
+unsafe impl Send for Handle {}
 
 impl Event {
     unsafe fn from_ptr(event: *const mpv_event) -> Event {
@@ -318,7 +356,7 @@ impl Property {
 
     pub fn data<T: Format>(&self) -> Option<T> {
         unsafe {
-            if (*self.0).format == T::FORMAT {
+            if (*self.0).format == T::MPV_FORMAT {
                 T::from_ptr((*self.0).data).ok()
             } else {
                 None

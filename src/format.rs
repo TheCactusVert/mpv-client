@@ -1,17 +1,17 @@
-use super::ffi::{mpv_format, mpv_free};
+use super::ffi::mpv_free;
 use super::Result;
 
 use std::ffi::{c_char, c_void, CStr, CString};
 
 pub trait Format: Sized + Default {
-    const FORMAT: mpv_format;
+    const MPV_FORMAT: i32;
     fn from_ptr(ptr: *const c_void) -> Result<Self>;
     fn to_mpv<F: Fn(*const c_void) -> Result<()>>(self, fun: F) -> Result<()>;
     fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self>;
 }
 
 impl Format for f64 {
-    const FORMAT: mpv_format = mpv_format::DOUBLE;
+    const MPV_FORMAT: i32 = 5;
 
     fn from_ptr(ptr: *const c_void) -> Result<Self> {
         Ok(unsafe { *(ptr as *const Self) })
@@ -29,7 +29,7 @@ impl Format for f64 {
 }
 
 impl Format for i64 {
-    const FORMAT: mpv_format = mpv_format::INT64;
+    const MPV_FORMAT: i32 = 4;
 
     fn from_ptr(ptr: *const c_void) -> Result<Self> {
         Ok(unsafe { *(ptr as *const Self) })
@@ -47,7 +47,7 @@ impl Format for i64 {
 }
 
 impl Format for String {
-    const FORMAT: mpv_format = mpv_format::STRING;
+    const MPV_FORMAT: i32 = 1;
 
     fn from_ptr(ptr: *const c_void) -> Result<Self> {
         let ptr = ptr as *const *const i8;
