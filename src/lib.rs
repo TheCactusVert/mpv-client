@@ -141,9 +141,11 @@ impl Handle {
     /// Return the name of this client handle. Every client has its own unique
     /// name, which is mostly used for user interface purposes.
     pub fn client_name(&self) -> &str {
-        unsafe { CStr::from_ptr(mpv_client_name(self.0)) }
-            .to_str()
-            .unwrap_or("unknown")
+        unsafe { CStr::from_ptr(mpv_client_name(self.0)).to_str().unwrap_or("unknown") }
+    }
+
+    pub fn id(&self) -> i64 {
+        unsafe { mpv_client_id(self.0) }
     }
 
     /// Send a command to the player. Commands are the same as those used in
@@ -385,7 +387,7 @@ impl Hook {
 
     /// The hook name as passed to `Handle::hook_add`.
     pub fn name(&self) -> &str {
-        unsafe { CStr::from_ptr((*self.0).name) }.to_str().unwrap_or("unknown")
+        unsafe { CStr::from_ptr((*self.0).name).to_str().unwrap_or("unknown") }
     }
 
     /// Internal ID that must be passed to `Handle::hook_continue`.

@@ -1,4 +1,4 @@
-use std::ffi::{c_char, c_double, c_int, c_ulonglong, c_void};
+use std::ffi::{c_char, c_double, c_int, c_longlong, c_ulonglong, c_void};
 
 #[repr(i32)]
 #[allow(dead_code)]
@@ -113,6 +113,7 @@ extern "C" {
     pub fn mpv_error_string(error: mpv_error) -> *const c_char;
     pub fn mpv_free(data: *mut c_void);
     pub fn mpv_client_name(ctx: *mut mpv_handle) -> *const c_char;
+    pub fn mpv_client_id(ctx: *mut mpv_handle) -> c_longlong;
     pub fn mpv_command(ctx: *mut mpv_handle, args: *const *const c_char) -> mpv_error;
     pub fn mpv_command_async(ctx: *mut mpv_handle, reply_userdata: u64, args: *const *const c_char) -> mpv_error;
     pub fn mpv_set_property(
