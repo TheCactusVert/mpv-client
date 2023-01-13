@@ -17,7 +17,7 @@ name = "mpv_plugin"
 crate-type = ["cdylib"]
 
 [dependencies]
-mpv-client = "0.3.3"
+mpv-client = "0.4.0"
 ```
 
 And then the code `src/lib.rs`:
@@ -27,12 +27,12 @@ use mpv_client::{mpv_handle, Event, Handle};
 
 #[no_mangle]
 extern "C" fn mpv_open_cplugin(handle: *mut mpv_handle) -> std::os::raw::c_int {
-  let mpv_handle = Handle::from_ptr(handle);
+  let mpv = Handle::from_ptr(handle);
   
-  println!("Hello world from Rust plugin {}!", mpv_handle.client_name());
+  println!("Hello world from Rust plugin {}!", mpv.client_name());
   
   loop {
-    match mpv_handle.wait_event(-1.) {
+    match mpv.wait_event(-1.) {
       Event::Shutdown => { return 0; },
       event => { println!("Got event: {}", event); },
     }
