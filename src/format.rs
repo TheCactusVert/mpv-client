@@ -1,7 +1,7 @@
 use super::ffi::mpv_free;
 use super::Result;
 
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::ffi::{c_char, c_int, c_void, CStr, CString};
 
 pub trait Format: Sized + Default {
     const MPV_FORMAT: i32;
@@ -15,17 +15,18 @@ impl Format for bool {
     const MPV_FORMAT: i32 = 3;
 
     fn from_ptr(ptr: *const c_void) -> Result<Self> {
-        Ok(unsafe { *(ptr as *const Self) })
+        Ok(unsafe { *(ptr as *const c_int) != 0 })
     }
 
     fn to_mpv<F: Fn(*const c_void) -> Result<()>>(self, fun: F) -> Result<()> {
-        fun(&self as *const _ as *const c_void)
+        let data = self as c_int;
+        fun(&data as *const _ as *const c_void)
     }
 
     fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
-        let mut data = Self::default();
+        let mut data = Self::default() as c_int;
         fun(&mut data as *mut _ as *mut c_void)?;
-        Ok(data)
+        Ok(data != 0)
     }
 }
 
