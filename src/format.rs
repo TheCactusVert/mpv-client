@@ -10,62 +10,6 @@ pub trait Format: Sized + Default {
     fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self>;
 }
 
-// MPV_FORMAT_FLAG
-impl Format for bool {
-    const MPV_FORMAT: i32 = 3;
-
-    fn from_ptr(ptr: *const c_void) -> Result<Self> {
-        Ok(unsafe { *(ptr as *const c_int) != 0 })
-    }
-
-    fn to_mpv<F: Fn(*const c_void) -> Result<()>>(self, fun: F) -> Result<()> {
-        let data = self as c_int;
-        fun(&data as *const _ as *const c_void)
-    }
-
-    fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
-        let mut data = Self::default() as c_int;
-        fun(&mut data as *mut _ as *mut c_void)?;
-        Ok(data != 0)
-    }
-}
-
-impl Format for f64 {
-    const MPV_FORMAT: i32 = 5;
-
-    fn from_ptr(ptr: *const c_void) -> Result<Self> {
-        Ok(unsafe { *(ptr as *const Self) })
-    }
-
-    fn to_mpv<F: Fn(*const c_void) -> Result<()>>(self, fun: F) -> Result<()> {
-        fun(&self as *const _ as *const c_void)
-    }
-
-    fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
-        let mut data = Self::default();
-        fun(&mut data as *mut _ as *mut c_void)?;
-        Ok(data)
-    }
-}
-
-impl Format for i64 {
-    const MPV_FORMAT: i32 = 4;
-
-    fn from_ptr(ptr: *const c_void) -> Result<Self> {
-        Ok(unsafe { *(ptr as *const Self) })
-    }
-
-    fn to_mpv<F: Fn(*const c_void) -> Result<()>>(self, fun: F) -> Result<()> {
-        fun(&self as *const _ as *const c_void)
-    }
-
-    fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
-        let mut data = Self::default();
-        fun(&mut data as *mut _ as *mut c_void)?;
-        Ok(data)
-    }
-}
-
 impl Format for String {
     const MPV_FORMAT: i32 = 1;
 
@@ -88,5 +32,60 @@ impl Format for String {
             mpv_free(ptr as *mut c_void);
             Ok(str?)
         }
+    }
+}
+
+impl Format for bool {
+    const MPV_FORMAT: i32 = 3;
+
+    fn from_ptr(ptr: *const c_void) -> Result<Self> {
+        Ok(unsafe { *(ptr as *const c_int) != 0 })
+    }
+
+    fn to_mpv<F: Fn(*const c_void) -> Result<()>>(self, fun: F) -> Result<()> {
+        let data = self as c_int;
+        fun(&data as *const _ as *const c_void)
+    }
+
+    fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
+        let mut data = Self::default() as c_int;
+        fun(&mut data as *mut _ as *mut c_void)?;
+        Ok(data != 0)
+    }
+}
+
+impl Format for i64 {
+    const MPV_FORMAT: i32 = 4;
+
+    fn from_ptr(ptr: *const c_void) -> Result<Self> {
+        Ok(unsafe { *(ptr as *const Self) })
+    }
+
+    fn to_mpv<F: Fn(*const c_void) -> Result<()>>(self, fun: F) -> Result<()> {
+        fun(&self as *const _ as *const c_void)
+    }
+
+    fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
+        let mut data = Self::default();
+        fun(&mut data as *mut _ as *mut c_void)?;
+        Ok(data)
+    }
+}
+
+impl Format for f64 {
+    const MPV_FORMAT: i32 = 5;
+
+    fn from_ptr(ptr: *const c_void) -> Result<Self> {
+        Ok(unsafe { *(ptr as *const Self) })
+    }
+
+    fn to_mpv<F: Fn(*const c_void) -> Result<()>>(self, fun: F) -> Result<()> {
+        fun(&self as *const _ as *const c_void)
+    }
+
+    fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
+        let mut data = Self::default();
+        fun(&mut data as *mut _ as *mut c_void)?;
+        Ok(data)
     }
 }
