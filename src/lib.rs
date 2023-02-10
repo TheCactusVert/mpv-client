@@ -14,7 +14,10 @@ use std::time::Duration;
 pub use ffi::mpv_handle;
 
 /// Client context used by the client API. Every client has its own private handle.
-pub struct Handle(*mut mpv_handle, bool);
+pub struct Handle {
+    handle: *mut mpv_handle,
+    is_owned: bool,
+}
 
 /// An enum representing the available events that can be received by
 /// `Handle::wait_event`.
@@ -114,35 +117,39 @@ impl Handle {
     /// The pointer must not be null
     pub fn from_ptr(ptr: *mut mpv_handle) -> Self {
         assert!(!ptr.is_null());
-        Self(ptr, false)
+        Self {
+            handle: ptr,
+            is_owned: false,
+        }
     }
 
     pub fn create_uninitialized() -> Self {
-        unsafe { Self(mpv_create(), true) }
+        Self {
+            handle: unsafe { mpv_create() },
+            is_owned: true,
+        }
     }
 
     pub fn create_client<S: AsRef<str>>(&self, name: S) -> Result<Self> {
         let name = CString::new(name.as_ref())?;
-        let client = unsafe { mpv_create_client(self.0, name.as_ptr()) };
-        if client.is_null() {
-            Err(Error::new(mpv_error::GENERIC))
-        } else {
-            Ok(Self(client, true))
-        }
+
+        Ok(Self {
+            handle: unsafe { mpv_create_client(self.handle, name.as_ptr()) },
+            is_owned: true,
+        })
     }
 
     pub fn create_weak_client<S: AsRef<str>>(&self, name: S) -> Result<Self> {
         let name = CString::new(name.as_ref())?;
-        let client = unsafe { mpv_create_weak_client(self.0, name.as_ptr()) };
-        if client.is_null() {
-            Err(Error::new(mpv_error::GENERIC))
-        } else {
-            Ok(Self(client, true))
-        }
+
+        Ok(Self {
+            handle: unsafe { mpv_create_weak_client(self.handle, name.as_ptr()) },
+            is_owned: true,
+        })
     }
 
     pub fn initialize(&self) -> Result<()> {
-        unsafe { mpv_result!(mpv_initialize(self.0)) }
+        unsafe { mpv_result!(mpv_initialize(self.handle)) }
     }
 
     /// Wait for the next event, or until the timeout expires, or if another thread
@@ -164,17 +171,21 @@ impl Handle {
     /// As long as the timeout is 0, this is safe to be called from mpv render API
     /// threads.
     pub fn wait_event(&self, timeout: f64) -> Event {
-        unsafe { Event::from_ptr(mpv_wait_event(self.0, timeout)) }
+        unsafe { Event::from_ptr(mpv_wait_event(self.handle, timeout)) }
     }
 
     /// Return the name of this client handle. Every client has its own unique
     /// name, which is mostly used for user interface purposes.
     pub fn client_name(&self) -> &str {
-        unsafe { CStr::from_ptr(mpv_client_name(self.0)).to_str().unwrap_or("unknown") }
+        unsafe {
+            CStr::from_ptr(mpv_client_name(self.handle))
+                .to_str()
+                .unwrap_or("unknown")
+        }
     }
 
     pub fn id(&self) -> i64 {
-        unsafe { mpv_client_id(self.0) }
+        unsafe { mpv_client_id(self.handle) }
     }
 
     /// Send a command to the player. Commands are the same as those used in
@@ -188,7 +199,7 @@ impl Handle {
         let args: Vec<CString> = args.into_iter().map(|s| CString::new(s.as_ref()).unwrap()).collect();
         let mut raw_args: Vec<*const i8> = args.iter().map(|s| s.as_ptr()).collect();
         raw_args.push(std::ptr::null()); // Adding null at the end
-        unsafe { mpv_result!(mpv_command(self.0, raw_args.as_ptr())) }
+        unsafe { mpv_result!(mpv_command(self.handle, raw_args.as_ptr())) }
     }
 
     /// Same as `Handle::command`, but run the command asynchronously.
@@ -212,7 +223,7 @@ impl Handle {
         let args: Vec<CString> = args.into_iter().map(|s| CString::new(s.as_ref()).unwrap()).collect();
         let mut raw_args: Vec<*const i8> = args.iter().map(|s| s.as_ptr()).collect();
         raw_args.push(std::ptr::null()); // Adding null at the end
-        unsafe { mpv_result!(mpv_command_async(self.0, reply_userdata, raw_args.as_ptr())) }
+        unsafe { mpv_result!(mpv_command_async(self.handle, reply_userdata, raw_args.as_ptr())) }
     }
 
     /// Display a message on the screen.
@@ -232,7 +243,7 @@ impl Handle {
 
     pub fn set_property<T: Format, S: AsRef<str>>(&self, name: S, data: T) -> Result<()> {
         let name = CString::new(name.as_ref())?;
-        data.to_mpv(|data| unsafe { mpv_result!(mpv_set_property(self.0, name.as_ptr(), T::MPV_FORMAT, data)) })
+        data.to_mpv(|data| unsafe { mpv_result!(mpv_set_property(self.handle, name.as_ptr(), T::MPV_FORMAT, data)) })
     }
 
     /// Read the value of the given property.
@@ -243,12 +254,12 @@ impl Handle {
     /// converted to f64, and access using String usually invokes a string formatter.
     pub fn get_property<T: Format, S: AsRef<str>>(&self, name: S) -> Result<T> {
         let name = CString::new(name.as_ref())?;
-        T::from_mpv(|data| unsafe { mpv_result!(mpv_get_property(self.0, name.as_ptr(), T::MPV_FORMAT, data)) })
+        T::from_mpv(|data| unsafe { mpv_result!(mpv_get_property(self.handle, name.as_ptr(), T::MPV_FORMAT, data)) })
     }
 
     pub fn observe_property<S: AsRef<str>>(&self, reply_userdata: u64, name: S, format: i32) -> Result<()> {
         let name = CString::new(name.as_ref())?;
-        unsafe { mpv_result!(mpv_observe_property(self.0, reply_userdata, name.as_ptr(), format)) }
+        unsafe { mpv_result!(mpv_observe_property(self.handle, reply_userdata, name.as_ptr(), format)) }
     }
 
     /// Undo `Handle::observe_property`. This will remove all observed properties for
@@ -256,23 +267,24 @@ impl Handle {
     ///
     /// Safe to be called from mpv render API threads.
     pub fn unobserve_property(&self, registered_reply_userdata: u64) -> Result<()> {
-        unsafe { mpv_result!(mpv_unobserve_property(self.0, registered_reply_userdata)) }
+        unsafe { mpv_result!(mpv_unobserve_property(self.handle, registered_reply_userdata)) }
     }
 
     pub fn hook_add(&self, reply_userdata: u64, name: &str, priority: i32) -> Result<()> {
         let name = CString::new(name)?;
-        unsafe { mpv_result!(mpv_hook_add(self.0, reply_userdata, name.as_ptr(), priority)) }
+        unsafe { mpv_result!(mpv_hook_add(self.handle, reply_userdata, name.as_ptr(), priority)) }
     }
 
     pub fn hook_continue(&self, id: u64) -> Result<()> {
-        unsafe { mpv_result!(mpv_hook_continue(self.0, id)) }
+        unsafe { mpv_result!(mpv_hook_continue(self.handle, id)) }
     }
 }
 
 impl Drop for Handle {
     fn drop(&mut self) {
-        if self.1 {
-            unsafe { mpv_destroy(self.0) }
+        if self.is_owned {
+            println!("Drop {}", self.client_name());
+            unsafe { mpv_destroy(self.handle) }
         }
     }
 }
