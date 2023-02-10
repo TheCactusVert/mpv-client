@@ -333,12 +333,11 @@ impl<'a> fmt::Display for Event<'a> {
             _ => mpv_event_id::NONE,
         };
 
-        let name = unsafe {
+        f.write_str(unsafe {
             CStr::from_ptr(mpv_event_name(event))
                 .to_str()
                 .unwrap_or("unknown event")
-        };
-        write!(f, "{}", name)
+        })
     }
 }
 
@@ -412,7 +411,7 @@ impl<'a> ClientMessage<'a> {
 
 impl<'a> fmt::Display for ClientMessage<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "client-message")
+        f.write_str("client-message")
     }
 }
 
@@ -437,6 +436,6 @@ impl<'a> Hook<'a> {
 
 impl<'a> fmt::Display for Hook<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name())
+        f.write_str(self.name())
     }
 }
