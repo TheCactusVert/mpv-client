@@ -118,9 +118,7 @@ macro_rules! mpv_result {
 
 impl Handle {
     /// Wrap a raw mpv_handle
-    /// The pointer must not be null
     pub fn from_ptr(ptr: *mut mpv_handle) -> Self {
-        assert!(!ptr.is_null());
         Self { inner: ptr }
     }
 
@@ -133,7 +131,6 @@ impl Handle {
 
     pub fn create_weak_client<S: AsRef<str>>(&self, name: S) -> Result<Client> {
         let name = CString::new(name.as_ref())?;
-
         Ok(Client(Handle::from_ptr(unsafe {
             mpv_create_weak_client(self.inner, name.as_ptr())
         })))
