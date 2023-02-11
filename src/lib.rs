@@ -281,8 +281,8 @@ impl Client {
         Self(Handle::from_ptr(unsafe { mpv_create() }))
     }
 
-    pub fn initialize(&self) -> Result<()> {
-        unsafe { mpv_result!(mpv_initialize(self.0.inner)) }
+    pub fn initialize(self) -> Result<Self> {
+        unsafe { mpv_result!(mpv_initialize(self.0.inner)) }.map(|()| self)
     }
 }
 
