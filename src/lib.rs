@@ -291,7 +291,7 @@ impl Drop for Client {
     }
 }
 
-unsafe impl Send for Handle {}
+unsafe impl Send for Client {}
 
 impl<'a> Event<'a> {
     unsafe fn from_ptr(event: *const mpv_event) -> Event<'a> {
