@@ -49,8 +49,7 @@ impl Format for bool {
 
     fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
         let mut data = Self::default() as c_int;
-        fun(&mut data as *mut _ as *mut c_void)?;
-        Ok(data != 0)
+        fun(&mut data as *mut _ as *mut c_void).map(|()| data != 0)
     }
 }
 
@@ -67,8 +66,7 @@ impl Format for i64 {
 
     fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
         let mut data = Self::default();
-        fun(&mut data as *mut _ as *mut c_void)?;
-        Ok(data)
+        fun(&mut data as *mut _ as *mut c_void).map(|()| data)
     }
 }
 
@@ -85,7 +83,6 @@ impl Format for f64 {
 
     fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
         let mut data = Self::default();
-        fun(&mut data as *mut _ as *mut c_void)?;
-        Ok(data)
+        fun(&mut data as *mut _ as *mut c_void).map(|()| data)
     }
 }
