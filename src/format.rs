@@ -1,7 +1,7 @@
 use super::ffi::mpv_free;
 use super::Result;
 
-use std::ffi::{c_char, c_int, c_void, CStr, CString};
+use std::ffi::{c_int, c_void, CStr, CString};
 
 pub trait Format: Sized + Default {
     const MPV_FORMAT: i32;
@@ -24,14 +24,13 @@ impl Format for String {
     }
 
     fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
-        let mut ptr: *mut c_char = std::ptr::null_mut();
-        fun(&mut ptr as *mut _ as *mut c_void)?;
-        unsafe {
-            let str = CStr::from_ptr(ptr as *mut i8);
+        let mut ptr: *mut i8 = std::ptr::null_mut();
+        fun(&mut ptr as *mut _ as *mut c_void).and_then(|()| unsafe {
+            let str = CStr::from_ptr(ptr);
             let str = str.to_str().map(|s| s.to_owned());
             mpv_free(ptr as *mut c_void);
             Ok(str?)
-        }
+        })
     }
 }
 
