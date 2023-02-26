@@ -2,7 +2,7 @@ mod error;
 mod ffi;
 mod format;
 
-use error::{Error, Result};
+pub use error::{Error, Result};
 use ffi::*;
 pub use format::Format;
 
@@ -423,11 +423,11 @@ impl<'a> ClientMessage<'a> {
         Self(ptr as *const mpv_event_client_message, PhantomData)
     }
 
-    pub fn args(&self) -> Vec<String> {
+    pub fn args(&self) -> Vec<&'a str> {
         unsafe {
             let args = std::slice::from_raw_parts((*self.0).args, (*self.0).num_args as usize);
             args.into_iter()
-                .map(|arg| CStr::from_ptr(*arg).to_str().unwrap().to_string())
+                .map(|arg| CStr::from_ptr(*arg).to_str().unwrap())
                 .collect()
         }
     }
