@@ -160,7 +160,7 @@ impl Handle {
 
     /// Return the name of this client handle. Every client has its own unique
     /// name, which is mostly used for user interface purposes.
-    pub fn client_name(&self) -> &str {
+    pub fn name(&self) -> &str {
         unsafe {
             CStr::from_ptr(mpv_client_name(self.inner))
                 .to_str()
