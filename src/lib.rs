@@ -6,7 +6,6 @@ pub use error::{Error, Result};
 use ffi::*;
 pub use format::Format;
 
-use core::marker::PhantomData;
 use std::ffi::{c_void, CStr, CString};
 use std::fmt;
 use std::ops::Deref;
@@ -25,7 +24,7 @@ pub struct Client(Handle);
 
 /// An enum representing the available events that can be received by
 /// `Handle::wait_event`.
-pub enum Event<'a> {
+pub enum Event {
     /// Nothing happened. Happens on timeouts or sporadic wakeups.
     None,
     /// Happens when the player quits. The player enters a state where it tries
@@ -35,7 +34,7 @@ pub enum Event<'a> {
     LogMessage, // TODO mpv_event_log_message
     /// Reply to a `Handle::get_property_async` request.
     /// See also `Property`.
-    GetPropertyReply(Result<()>, u64, Property<'a>),
+    GetPropertyReply(Result<()>, u64, Property),
     /// Reply to a `Handle::set_property_async` request.
     /// (Unlike `GetPropertyReply`, `Property` is not used.)
     SetPropertyReply(Result<()>, u64),
@@ -44,7 +43,7 @@ pub enum Event<'a> {
     CommandReply(Result<()>, u64), // TODO mpv_event_command
     /// Notification before playback start of a file (before the file is loaded).
     /// See also `StartFile`.
-    StartFile(StartFile<'a>),
+    StartFile(StartFile),
     /// Notification after playback end (after the file was unloaded).
     /// See also `EndFile`.
     EndFile, // TODO mpv_event_end_file
@@ -56,7 +55,7 @@ pub enum Event<'a> {
     /// dispatch the message, and passes along all arguments starting from the
     /// second argument as strings.
     /// See also `ClientMessage`.
-    ClientMessage(ClientMessage<'a>),
+    ClientMessage(ClientMessage),
     /// Happens after video changed in some way. This can happen on resolution
     /// changes, pixel format changes, or video filter changes. The event is
     /// sent after the video filters and the VO are reconfigured. Applications
@@ -79,7 +78,7 @@ pub enum Event<'a> {
     PlaybackRestart,
     /// Event sent due to `mpv_observe_property()`.
     /// See also `Property`.
-    PropertyChange(u64, Property<'a>),
+    PropertyChange(u64, Property),
     /// Happens if the internal per-mpv_handle ringbuffer overflows, and at
     /// least 1 event had to be dropped. This can happen if the client doesn't
     /// read the event queue quickly enough with `Handle::wait_event`, or if the
@@ -92,20 +91,20 @@ pub enum Event<'a> {
     /// hook is invoked. If you receive this, you must handle it, and continue
     /// the hook with `Handle::hook_continue`.
     /// See also `Hook`.
-    Hook(u64, Hook<'a>),
+    Hook(u64, Hook),
 }
 
 /// Data associated with `Event::GetPropertyReply` and `Event::PropertyChange`.
-pub struct Property<'a>(*const mpv_event_property, PhantomData<&'a ()>);
+pub struct Property(*const mpv_event_property);
 
 /// Data associated with `Event::StartFile`.
-pub struct StartFile<'a>(*const mpv_event_start_file, PhantomData<&'a ()>);
+pub struct StartFile(*const mpv_event_start_file);
 
 /// Data associated with `Event::ClientMessage`.
-pub struct ClientMessage<'a>(*const mpv_event_client_message, PhantomData<&'a ()>);
+pub struct ClientMessage(*const mpv_event_client_message);
 
 /// Data associated with `Event::Hook`.
-pub struct Hook<'a>(*const mpv_event_hook, PhantomData<&'a ()>);
+pub struct Hook(*const mpv_event_hook);
 
 macro_rules! mpv_result {
     ($f:expr) => {
@@ -303,8 +302,8 @@ impl Drop for Client {
 
 unsafe impl Send for Client {}
 
-impl<'a> Event<'a> {
-    unsafe fn from_ptr(event: *const mpv_event) -> Event<'a> {
+impl Event {
+    unsafe fn from_ptr(event: *const mpv_event) -> Event {
         match (*event).event_id {
             mpv_event_id::SHUTDOWN => Event::Shutdown,
             mpv_event_id::LOG_MESSAGE => Event::LogMessage,
@@ -335,7 +334,7 @@ impl<'a> Event<'a> {
     }
 }
 
-impl<'a> fmt::Display for Event<'a> {
+impl fmt::Display for Event {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let event = match *self {
             Self::Shutdown => mpv_event_id::SHUTDOWN,
@@ -365,12 +364,12 @@ impl<'a> fmt::Display for Event<'a> {
     }
 }
 
-impl<'a> Property<'a> {
+impl Property {
     /// Wrap a raw mpv_event_property
     /// The pointer must not be null
     fn from_ptr(ptr: *const c_void) -> Self {
         assert!(!ptr.is_null());
-        Self(ptr as *const mpv_event_property, PhantomData)
+        Self(ptr as *const mpv_event_property)
     }
 
     /// Name of the property.
@@ -389,18 +388,18 @@ impl<'a> Property<'a> {
     }
 }
 
-impl<'a> fmt::Display for Property<'a> {
+impl fmt::Display for Property {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name())
     }
 }
 
-impl<'a> StartFile<'a> {
+impl StartFile {
     /// Wrap a raw mpv_event_start_file
     /// The pointer must not be null
     fn from_ptr(ptr: *const c_void) -> Self {
         assert!(!ptr.is_null());
-        Self(ptr as *const mpv_event_start_file, PhantomData)
+        Self(ptr as *const mpv_event_start_file)
     }
 
     /// Playlist entry ID of the file being loaded now.
@@ -409,21 +408,21 @@ impl<'a> StartFile<'a> {
     }
 }
 
-impl<'a> fmt::Display for StartFile<'a> {
+impl fmt::Display for StartFile {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.playlist_entry_id())
     }
 }
 
-impl<'a> ClientMessage<'a> {
+impl ClientMessage {
     /// Wrap a raw mpv_event_client_message.
     /// The pointer must not be null
     fn from_ptr(ptr: *const c_void) -> Self {
         assert!(!ptr.is_null());
-        Self(ptr as *const mpv_event_client_message, PhantomData)
+        Self(ptr as *const mpv_event_client_message)
     }
 
-    pub fn args(&self) -> Vec<&'a str> {
+    pub fn args<'a>(&self) -> Vec<&'a str> {
         unsafe {
             let args = std::slice::from_raw_parts((*self.0).args, (*self.0).num_args as usize);
             args.into_iter()
@@ -433,18 +432,18 @@ impl<'a> ClientMessage<'a> {
     }
 }
 
-impl<'a> fmt::Display for ClientMessage<'a> {
+impl fmt::Display for ClientMessage {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("client-message")
     }
 }
 
-impl<'a> Hook<'a> {
+impl Hook {
     /// Wrap a raw mpv_event_hook.
     /// The pointer must not be null
     fn from_ptr(ptr: *const c_void) -> Self {
         assert!(!ptr.is_null());
-        Self(ptr as *const mpv_event_hook, PhantomData)
+        Self(ptr as *const mpv_event_hook)
     }
 
     /// The hook name as passed to `Handle::hook_add`.
@@ -458,7 +457,7 @@ impl<'a> Hook<'a> {
     }
 }
 
-impl<'a> fmt::Display for Hook<'a> {
+impl fmt::Display for Hook {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str(self.name())
     }
