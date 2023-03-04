@@ -13,6 +13,13 @@ use std::time::Duration;
 
 pub use ffi::mpv_handle;
 
+#[macro_export]
+macro_rules! osd {
+    ($client:expr, $duration:expr, $($arg:tt)*) => {
+        $client.osd_message(std::format!($($arg)*), $duration)
+    };
+}
+
 /// Representation of a borrowed client context used by the client API.
 /// Every client has its own private handle.
 pub struct Handle {
