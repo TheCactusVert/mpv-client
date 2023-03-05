@@ -8,21 +8,19 @@ pub use format::Format;
 
 use std::ffi::{c_void, CStr, CString};
 use std::fmt;
-use std::ops::Deref;
-use std::time::Duration;
+use std::ops::{Deref, DerefMut};
+use std::ptr::slice_from_raw_parts_mut;
 
 pub use ffi::mpv_handle;
 
-pub struct MpvHandle {
-    inner: *mut mpv_handle,
-}
-
 /// Representation of a borrowed client context used by the client API.
 /// Every client has its own private handle.
-pub struct Handle(MpvHandle);
+pub struct Handle {
+    inner: [mpv_handle],
+}
 
 /// A type representing an owned client context.
-pub struct Client(MpvHandle);
+pub struct Client(*mut mpv_handle);
 
 /// An enum representing the available events that can be received by
 /// `Handle::wait_event`.
@@ -108,7 +106,7 @@ pub struct ClientMessage(*const mpv_event_client_message);
 /// Data associated with `Event::Hook`.
 pub struct Hook(*const mpv_event_hook);
 
-macro_rules! mpv_result {
+macro_rules! result {
     ($f:expr) => {
         match $f {
             mpv_error::SUCCESS => Ok(()),
@@ -120,30 +118,66 @@ macro_rules! mpv_result {
 #[macro_export]
 macro_rules! osd {
     ($client:expr, $duration:expr, $($arg:tt)*) => {
-        $client.osd_message(std::format!($($arg)*), $duration)
-    };
+        $client.command(&["show-text", &format!($($arg)*), &$duration.as_millis().to_string()])
+    }
 }
 
 #[macro_export]
 macro_rules! osd_async {
-    ($client:expr, $duration:expr, $($arg:tt)*) => {
-        $client.osd_message_async(std::format!($($arg)*), $duration)
-    };
+    ($client:expr, $reply:expr, $duration:expr, $($arg:tt)*) => {
+        $client.command_async($reply, &["show-text", &format!($($arg)*), &$duration.as_millis().to_string()])
+    }
 }
 
-impl MpvHandle {
-    pub fn create_client<S: AsRef<str>>(&self, name: S) -> Result<Client> {
-        let name = CString::new(name.as_ref())?;
-        Ok(Client(MpvHandle {
-            inner: unsafe { mpv_create_client(self.inner, name.as_ptr()) },
-        }))
+impl Handle {
+    /// Wrap a raw mpv_handle
+    ///
+    /// This function will wrap the provided `ptr` with a `Handle` wrapper, which
+    /// allows inspection and interoperation of non-owned `mpv_handle`.
+    ///
+    /// # Safety
+    ///
+    /// * `ptr` must be non null.
+    ///
+    /// * The memory referenced by the returned `Handle` must not be freed for
+    ///   the duration of lifetime `'a`.
+    #[inline]
+    pub fn from_ptr<'a>(ptr: *mut mpv_handle) -> &'a mut Self {
+        unsafe { &mut *(slice_from_raw_parts_mut(ptr, 1) as *mut Self) }
     }
 
-    pub fn create_weak_client<S: AsRef<str>>(&self, name: S) -> Result<Client> {
+    #[inline]
+    pub fn as_ptr(&self) -> *const mpv_handle {
+        self.inner.as_ptr()
+    }
+
+    #[inline]
+    pub fn as_mut_ptr(&mut self) -> *mut mpv_handle {
+        self.inner.as_mut_ptr()
+    }
+
+    pub fn create_client<S: AsRef<str>>(&mut self, name: S) -> Result<Client> {
         let name = CString::new(name.as_ref())?;
-        Ok(Client(MpvHandle {
-            inner: unsafe { mpv_create_weak_client(self.inner, name.as_ptr()) },
-        }))
+        let handle = unsafe { mpv_create_client(self.as_mut_ptr(), name.as_ptr()) };
+        if handle.is_null() {
+            Err(Error::new(mpv_error::NOMEM))
+        } else {
+            Ok(Client(handle))
+        }
+    }
+
+    pub fn create_weak_client<S: AsRef<str>>(&mut self, name: S) -> Result<Client> {
+        let name = CString::new(name.as_ref())?;
+        let handle = unsafe { mpv_create_weak_client(self.as_mut_ptr(), name.as_ptr()) };
+        if handle.is_null() {
+            Err(Error::new(mpv_error::NOMEM))
+        } else {
+            Ok(Client(handle))
+        }
+    }
+
+    pub fn initialize(&mut self) -> Result<()> {
+        unsafe { result!(mpv_initialize(self.as_mut_ptr())) }
     }
 
     /// Wait for the next event, or until the timeout expires, or if another thread
@@ -164,15 +198,15 @@ impl MpvHandle {
     ///
     /// As long as the timeout is 0, this is safe to be called from mpv render API
     /// threads.
-    pub fn wait_event(&self, timeout: f64) -> Event {
-        unsafe { Event::from_ptr(mpv_wait_event(self.inner, timeout)) }
+    pub fn wait_event(&mut self, timeout: f64) -> Event {
+        unsafe { Event::from_ptr(mpv_wait_event(self.as_mut_ptr(), timeout)) }
     }
 
     /// Return the name of this client handle. Every client has its own unique
     /// name, which is mostly used for user interface purposes.
-    pub fn name(&self) -> &str {
+    pub fn name<'a>(&mut self) -> &'a str {
         unsafe {
-            CStr::from_ptr(mpv_client_name(self.inner))
+            CStr::from_ptr(mpv_client_name(self.as_mut_ptr()))
                 .to_str()
                 .unwrap_or("unknown")
         }
@@ -190,14 +224,14 @@ impl MpvHandle {
     /// client name as first argument, but also accepts the client ID formatted in
     /// this manner.
     #[inline]
-    pub fn id(&self) -> i64 {
-        unsafe { mpv_client_id(self.inner) }
+    pub fn id(&mut self) -> i64 {
+        unsafe { mpv_client_id(self.as_mut_ptr()) }
     }
 
     /// Send a command to the player. Commands are the same as those used in
     /// input.conf, except that this function takes parameters in a pre-split
     /// form.
-    pub fn command<I, S>(&self, args: I) -> Result<()>
+    pub fn command<I, S>(&mut self, args: I) -> Result<()>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
@@ -205,7 +239,7 @@ impl MpvHandle {
         let args: Vec<CString> = args.into_iter().map(|s| CString::new(s.as_ref()).unwrap()).collect();
         let mut raw_args: Vec<*const i8> = args.iter().map(|s| s.as_ptr()).collect();
         raw_args.push(std::ptr::null()); // Adding null at the end
-        unsafe { mpv_result!(mpv_command(self.inner, raw_args.as_ptr())) }
+        unsafe { result!(mpv_command(self.as_mut_ptr(), raw_args.as_ptr())) }
     }
 
     /// Same as `Handle::command`, but run the command asynchronously.
@@ -221,7 +255,7 @@ impl MpvHandle {
     /// positive.
     ///
     /// Safe to be called from mpv render API threads.
-    pub fn command_async<I, S>(&self, reply_userdata: u64, args: I) -> Result<()>
+    pub fn command_async<I, S>(&mut self, reply: u64, args: I) -> Result<()>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
@@ -229,27 +263,13 @@ impl MpvHandle {
         let args: Vec<CString> = args.into_iter().map(|s| CString::new(s.as_ref()).unwrap()).collect();
         let mut raw_args: Vec<*const i8> = args.iter().map(|s| s.as_ptr()).collect();
         raw_args.push(std::ptr::null()); // Adding null at the end
-        unsafe { mpv_result!(mpv_command_async(self.inner, reply_userdata, raw_args.as_ptr())) }
+        unsafe { result!(mpv_command_async(self.as_mut_ptr(), reply, raw_args.as_ptr())) }
     }
 
-    /// Display a message on the screen.
-    /// See `Handle::command`
-    pub fn osd_message<S: AsRef<str>>(&self, text: S, duration: Duration) -> Result<()> {
-        self.command(&["show-text", text.as_ref(), &duration.as_millis().to_string()])
-    }
-
-    /// Same as `Handle::osd_command`, but run the command asynchronously.
-    /// See `Handle::command_async`
-    pub fn osd_message_async<S: AsRef<str>>(&self, reply_userdata: u64, text: S, duration: Duration) -> Result<()> {
-        self.command_async(
-            reply_userdata,
-            &["show-text", text.as_ref(), &duration.as_millis().to_string()],
-        )
-    }
-
-    pub fn set_property<T: Format, S: AsRef<str>>(&self, name: S, data: T) -> Result<()> {
+    pub fn set_property<T: Format, S: AsRef<str>>(&mut self, name: S, data: T) -> Result<()> {
         let name = CString::new(name.as_ref())?;
-        data.to_mpv(|data| unsafe { mpv_result!(mpv_set_property(self.inner, name.as_ptr(), T::MPV_FORMAT, data)) })
+        let handle = self.as_mut_ptr();
+        data.to_mpv(|data| unsafe { result!(mpv_set_property(handle, name.as_ptr(), T::MPV_FORMAT, data)) })
     }
 
     /// Read the value of the given property.
@@ -258,74 +278,69 @@ impl MpvHandle {
     /// usually will fail with `MPV_ERROR_PROPERTY_FORMAT`. In some cases, the data
     /// is automatically converted and access succeeds. For example, i64 is always
     /// converted to f64, and access using String usually invokes a string formatter.
-    pub fn get_property<T: Format, S: AsRef<str>>(&self, name: S) -> Result<T> {
+    pub fn get_property<T: Format, S: AsRef<str>>(&mut self, name: S) -> Result<T> {
         let name = CString::new(name.as_ref())?;
-        T::from_mpv(|data| unsafe { mpv_result!(mpv_get_property(self.inner, name.as_ptr(), T::MPV_FORMAT, data)) })
+        let handle = self.as_mut_ptr();
+        T::from_mpv(|data| unsafe { result!(mpv_get_property(handle, name.as_ptr(), T::MPV_FORMAT, data)) })
     }
 
-    pub fn observe_property<S: AsRef<str>>(&self, reply_userdata: u64, name: S, format: i32) -> Result<()> {
+    pub fn observe_property<S: AsRef<str>>(&mut self, reply: u64, name: S, format: i32) -> Result<()> {
         let name = CString::new(name.as_ref())?;
-        unsafe { mpv_result!(mpv_observe_property(self.inner, reply_userdata, name.as_ptr(), format)) }
+        unsafe { result!(mpv_observe_property(self.as_mut_ptr(), reply, name.as_ptr(), format)) }
     }
 
     /// Undo `Handle::observe_property`. This will remove all observed properties for
-    /// which the given number was passed as reply_userdata to `Handle::observe_property`.
+    /// which the given number was passed as reply to `Handle::observe_property`.
     ///
     /// Safe to be called from mpv render API threads.
-    pub fn unobserve_property(&self, registered_reply_userdata: u64) -> Result<()> {
-        unsafe { mpv_result!(mpv_unobserve_property(self.inner, registered_reply_userdata)) }
+    pub fn unobserve_property(&mut self, registered_reply: u64) -> Result<()> {
+        unsafe { result!(mpv_unobserve_property(self.as_mut_ptr(), registered_reply)) }
     }
 
-    pub fn hook_add(&self, reply_userdata: u64, name: &str, priority: i32) -> Result<()> {
+    pub fn hook_add(&mut self, reply: u64, name: &str, priority: i32) -> Result<()> {
         let name = CString::new(name)?;
-        unsafe { mpv_result!(mpv_hook_add(self.inner, reply_userdata, name.as_ptr(), priority)) }
+        unsafe { result!(mpv_hook_add(self.as_mut_ptr(), reply, name.as_ptr(), priority)) }
     }
 
-    pub fn hook_continue(&self, id: u64) -> Result<()> {
-        unsafe { mpv_result!(mpv_hook_continue(self.inner, id)) }
-    }
-}
-
-impl Handle {
-    /// Wrap a raw mpv_handle
-    pub fn from_ptr(ptr: *mut mpv_handle) -> Self {
-        Self(MpvHandle { inner: ptr })
-    }
-}
-
-impl Deref for Handle {
-    type Target = MpvHandle;
-
-    #[inline]
-    fn deref(&self) -> &MpvHandle {
-        &self.0
+    pub fn hook_continue(&mut self, id: u64) -> Result<()> {
+        unsafe { result!(mpv_hook_continue(self.as_mut_ptr(), id)) }
     }
 }
 
 impl Client {
-    pub fn new() -> Self {
-        Self(MpvHandle {
-            inner: unsafe { mpv_create() },
-        })
+    pub fn new() -> Result<Self> {
+        let handle = unsafe { mpv_create() };
+        if handle.is_null() {
+            Err(Error::new(mpv_error::NOMEM))
+        } else {
+            Ok(Self(handle))
+        }
     }
 
     pub fn initialize(self) -> Result<Self> {
-        unsafe { mpv_result!(mpv_initialize(self.0.inner)) }.map(|()| self)
-    }
-}
-
-impl Deref for Client {
-    type Target = MpvHandle;
-
-    #[inline]
-    fn deref(&self) -> &MpvHandle {
-        &self.0
+        unsafe { result!(mpv_initialize(self.0)).map(|()| self) }
     }
 }
 
 impl Drop for Client {
     fn drop(&mut self) {
-        unsafe { mpv_destroy(self.0.inner) }
+        unsafe { mpv_destroy(self.0) }
+    }
+}
+
+impl Deref for Client {
+    type Target = Handle;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        Handle::from_ptr(self.0)
+    }
+}
+
+impl DerefMut for Client {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Handle::from_ptr(self.0)
     }
 }
 
@@ -337,14 +352,14 @@ impl Event {
             mpv_event_id::SHUTDOWN => Event::Shutdown,
             mpv_event_id::LOG_MESSAGE => Event::LogMessage,
             mpv_event_id::GET_PROPERTY_REPLY => Event::GetPropertyReply(
-                mpv_result!((*event).error),
+                result!((*event).error),
                 (*event).reply_userdata,
                 Property::from_ptr((*event).data),
             ),
             mpv_event_id::SET_PROPERTY_REPLY => {
-                Event::SetPropertyReply(mpv_result!((*event).error), (*event).reply_userdata)
+                Event::SetPropertyReply(result!((*event).error), (*event).reply_userdata)
             }
-            mpv_event_id::COMMAND_REPLY => Event::CommandReply(mpv_result!((*event).error), (*event).reply_userdata),
+            mpv_event_id::COMMAND_REPLY => Event::CommandReply(result!((*event).error), (*event).reply_userdata),
             mpv_event_id::START_FILE => Event::StartFile(StartFile::from_ptr((*event).data)),
             mpv_event_id::END_FILE => Event::EndFile,
             mpv_event_id::FILE_LOADED => Event::FileLoaded,
@@ -419,7 +434,7 @@ impl Property {
 
 impl fmt::Display for Property {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name())
+        f.write_str(self.name())
     }
 }
 
