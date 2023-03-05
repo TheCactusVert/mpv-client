@@ -13,14 +13,16 @@ use std::time::Duration;
 
 pub use ffi::mpv_handle;
 
-/// Representation of a borrowed client context used by the client API.
-/// Every client has its own private handle.
-pub struct Handle {
+pub struct MpvHandle {
     inner: *mut mpv_handle,
 }
 
+/// Representation of a borrowed client context used by the client API.
+/// Every client has its own private handle.
+pub struct Handle(MpvHandle);
+
 /// A type representing an owned client context.
-pub struct Client(Handle);
+pub struct Client(MpvHandle);
 
 /// An enum representing the available events that can be received by
 /// `Handle::wait_event`.
@@ -129,24 +131,19 @@ macro_rules! osd_async {
     };
 }
 
-impl Handle {
-    /// Wrap a raw mpv_handle
-    pub fn from_ptr(ptr: *mut mpv_handle) -> Self {
-        Self { inner: ptr }
-    }
-
+impl MpvHandle {
     pub fn create_client<S: AsRef<str>>(&self, name: S) -> Result<Client> {
         let name = CString::new(name.as_ref())?;
-        Ok(Client(Handle::from_ptr(unsafe {
-            mpv_create_client(self.inner, name.as_ptr())
-        })))
+        Ok(Client(MpvHandle {
+            inner: unsafe { mpv_create_client(self.inner, name.as_ptr()) },
+        }))
     }
 
     pub fn create_weak_client<S: AsRef<str>>(&self, name: S) -> Result<Client> {
         let name = CString::new(name.as_ref())?;
-        Ok(Client(Handle::from_ptr(unsafe {
-            mpv_create_weak_client(self.inner, name.as_ptr())
-        })))
+        Ok(Client(MpvHandle {
+            inner: unsafe { mpv_create_weak_client(self.inner, name.as_ptr()) },
+        }))
     }
 
     /// Wait for the next event, or until the timeout expires, or if another thread
@@ -289,9 +286,27 @@ impl Handle {
     }
 }
 
+impl Handle {
+    /// Wrap a raw mpv_handle
+    pub fn from_ptr(ptr: *mut mpv_handle) -> Self {
+        Self(MpvHandle { inner: ptr })
+    }
+}
+
+impl Deref for Handle {
+    type Target = MpvHandle;
+
+    #[inline]
+    fn deref(&self) -> &MpvHandle {
+        &self.0
+    }
+}
+
 impl Client {
     pub fn new() -> Self {
-        Self(Handle::from_ptr(unsafe { mpv_create() }))
+        Self(MpvHandle {
+            inner: unsafe { mpv_create() },
+        })
     }
 
     pub fn initialize(self) -> Result<Self> {
@@ -300,10 +315,10 @@ impl Client {
 }
 
 impl Deref for Client {
-    type Target = Handle;
+    type Target = MpvHandle;
 
     #[inline]
-    fn deref(&self) -> &Handle {
+    fn deref(&self) -> &MpvHandle {
         &self.0
     }
 }
