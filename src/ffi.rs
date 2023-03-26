@@ -52,6 +52,33 @@ pub enum mpv_event_id {
     HOOK = 25,
 }
 
+#[repr(i32)]
+#[allow(dead_code)]
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone, PartialEq)]
+pub enum mpv_log_level {
+    MPV_LOG_LEVEL_NONE = 0,
+    MPV_LOG_LEVEL_FATAL = 10,
+    MPV_LOG_LEVEL_ERROR = 20,
+    MPV_LOG_LEVEL_WARN = 30,
+    MPV_LOG_LEVEL_INFO = 40,
+    MPV_LOG_LEVEL_V = 50,
+    MPV_LOG_LEVEL_DEBUG = 60,
+    MPV_LOG_LEVEL_TRACE = 70,
+}
+
+#[repr(i32)]
+#[allow(dead_code)]
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone, PartialEq)]
+pub enum mpv_end_file_reason {
+    MPV_END_FILE_REASON_EOF = 0,
+    MPV_END_FILE_REASON_STOP = 2,
+    MPV_END_FILE_REASON_QUIT = 3,
+    MPV_END_FILE_REASON_ERROR = 4,
+    MPV_END_FILE_REASON_REDIRECT = 5,
+}
+
 /// Raw client context.
 #[allow(non_camel_case_types)]
 pub type mpv_handle = c_void;
@@ -66,8 +93,27 @@ pub struct mpv_event_property {
 
 #[repr(C)]
 #[allow(non_camel_case_types)]
+pub struct mpv_event_log_message {
+    pub prefix: *const c_char,
+    pub level: *const c_char,
+    pub text: *const c_char,
+    pub log_level: mpv_log_level,
+}
+
+#[repr(C)]
+#[allow(non_camel_case_types)]
 pub struct mpv_event_start_file {
     pub playlist_entry_id: c_ulonglong,
+}
+
+#[repr(C)]
+#[allow(non_camel_case_types)]
+pub struct mpv_event_end_file {
+    pub reason: mpv_end_file_reason,
+    pub error: c_int,
+    pub playlist_entry_id: c_ulonglong,
+    pub playlist_insert_id: c_ulonglong,
+    pub playlist_insert_num_entries: c_int,
 }
 
 #[repr(C)]

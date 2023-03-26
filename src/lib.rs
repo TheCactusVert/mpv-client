@@ -31,7 +31,8 @@ pub enum Event {
     /// to disconnect all clients.
     Shutdown,
     /// See `Handle::request_log_messages`.
-    LogMessage, // TODO mpv_event_log_message
+    /// See also `LogMessage`.
+    LogMessage(LogMessage),
     /// Reply to a `Handle::get_property_async` request.
     /// See also `Property`.
     GetPropertyReply(Result<()>, u64, Property),
@@ -40,13 +41,13 @@ pub enum Event {
     SetPropertyReply(Result<()>, u64),
     /// Reply to a `Handle::command_async` or mpv_command_node_async() request.
     /// See also `Command`.
-    CommandReply(Result<()>, u64), // TODO mpv_event_command
+    CommandReply(Result<()>, u64), // TODO mpv_event_command and mpv_node
     /// Notification before playback start of a file (before the file is loaded).
     /// See also `StartFile`.
     StartFile(StartFile),
     /// Notification after playback end (after the file was unloaded).
     /// See also `EndFile`.
-    EndFile, // TODO mpv_event_end_file
+    EndFile(EndFile),
     /// Notification when the file has been loaded (headers were read etc.), and
     /// decoding starts.
     FileLoaded,
@@ -97,8 +98,14 @@ pub enum Event {
 /// Data associated with `Event::GetPropertyReply` and `Event::PropertyChange`.
 pub struct Property(*const mpv_event_property);
 
+/// Data associated with `Event::LogMessage`.
+pub struct LogMessage(*const mpv_event_log_message);
+
 /// Data associated with `Event::StartFile`.
 pub struct StartFile(*const mpv_event_start_file);
+
+/// Data associated with `Event::EndFile`.
+pub struct EndFile(*const mpv_event_end_file);
 
 /// Data associated with `Event::ClientMessage`.
 pub struct ClientMessage(*const mpv_event_client_message);
@@ -147,12 +154,12 @@ impl Handle {
     }
 
     #[inline]
-    pub fn as_ptr(&self) -> *const mpv_handle {
+    pub unsafe fn as_ptr(&self) -> *const mpv_handle {
         self.inner.as_ptr()
     }
 
     #[inline]
-    pub fn as_mut_ptr(&mut self) -> *mut mpv_handle {
+    pub unsafe fn as_mut_ptr(&mut self) -> *mut mpv_handle {
         self.inner.as_mut_ptr()
     }
 
@@ -268,7 +275,7 @@ impl Handle {
 
     pub fn set_property<T: Format, S: AsRef<str>>(&mut self, name: S, data: T) -> Result<()> {
         let name = CString::new(name.as_ref())?;
-        let handle = self.as_mut_ptr();
+        let handle = unsafe { self.as_mut_ptr() };
         data.to_mpv(|data| unsafe { result!(mpv_set_property(handle, name.as_ptr(), T::MPV_FORMAT, data)) })
     }
 
@@ -280,7 +287,7 @@ impl Handle {
     /// converted to f64, and access using String usually invokes a string formatter.
     pub fn get_property<T: Format, S: AsRef<str>>(&mut self, name: S) -> Result<T> {
         let name = CString::new(name.as_ref())?;
-        let handle = self.as_mut_ptr();
+        let handle = unsafe { self.as_mut_ptr() };
         T::from_mpv(|data| unsafe { result!(mpv_get_property(handle, name.as_ptr(), T::MPV_FORMAT, data)) })
     }
 
@@ -350,7 +357,7 @@ impl Event {
     unsafe fn from_ptr(event: *const mpv_event) -> Event {
         match (*event).event_id {
             mpv_event_id::SHUTDOWN => Event::Shutdown,
-            mpv_event_id::LOG_MESSAGE => Event::LogMessage,
+            mpv_event_id::LOG_MESSAGE => Event::LogMessage(LogMessage::from_ptr((*event).data)),
             mpv_event_id::GET_PROPERTY_REPLY => Event::GetPropertyReply(
                 result!((*event).error),
                 (*event).reply_userdata,
@@ -361,7 +368,7 @@ impl Event {
             }
             mpv_event_id::COMMAND_REPLY => Event::CommandReply(result!((*event).error), (*event).reply_userdata),
             mpv_event_id::START_FILE => Event::StartFile(StartFile::from_ptr((*event).data)),
-            mpv_event_id::END_FILE => Event::EndFile,
+            mpv_event_id::END_FILE => Event::EndFile(EndFile::from_ptr((*event).data)),
             mpv_event_id::FILE_LOADED => Event::FileLoaded,
             mpv_event_id::CLIENT_MESSAGE => Event::ClientMessage(ClientMessage::from_ptr((*event).data)),
             mpv_event_id::VIDEO_RECONFIG => Event::VideoReconfig,
@@ -382,12 +389,12 @@ impl fmt::Display for Event {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let event = match *self {
             Self::Shutdown => mpv_event_id::SHUTDOWN,
-            Self::LogMessage => mpv_event_id::LOG_MESSAGE,
+            Self::LogMessage(..) => mpv_event_id::LOG_MESSAGE,
             Self::GetPropertyReply(..) => mpv_event_id::GET_PROPERTY_REPLY,
             Self::SetPropertyReply(..) => mpv_event_id::SET_PROPERTY_REPLY,
             Self::CommandReply(..) => mpv_event_id::COMMAND_REPLY,
             Self::StartFile(..) => mpv_event_id::START_FILE,
-            Self::EndFile => mpv_event_id::END_FILE,
+            Self::EndFile(..) => mpv_event_id::END_FILE,
             Self::FileLoaded => mpv_event_id::FILE_LOADED,
             Self::ClientMessage(..) => mpv_event_id::CLIENT_MESSAGE,
             Self::VideoReconfig => mpv_event_id::VIDEO_RECONFIG,
@@ -438,6 +445,21 @@ impl fmt::Display for Property {
     }
 }
 
+impl LogMessage {
+    /// Wrap a raw mpv_event_log_message
+    /// The pointer must not be null
+    fn from_ptr(ptr: *const c_void) -> Self {
+        assert!(!ptr.is_null());
+        Self(ptr as *const mpv_event_log_message)
+    }
+}
+
+impl fmt::Display for LogMessage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("log message")
+    }
+}
+
 impl StartFile {
     /// Wrap a raw mpv_event_start_file
     /// The pointer must not be null
@@ -454,7 +476,22 @@ impl StartFile {
 
 impl fmt::Display for StartFile {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.playlist_entry_id())
+        f.write_str("start file")
+    }
+}
+
+impl EndFile {
+    /// Wrap a raw mpv_event_end_file
+    /// The pointer must not be null
+    fn from_ptr(ptr: *const c_void) -> Self {
+        assert!(!ptr.is_null());
+        Self(ptr as *const mpv_event_end_file)
+    }
+}
+
+impl fmt::Display for EndFile {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("end file")
     }
 }
 
