@@ -6,7 +6,7 @@ pub use error::{Error, Result};
 use ffi::*;
 pub use format::Format;
 
-use std::ffi::{c_void, CStr, CString};
+use std::ffi::{c_char, c_void, CStr, CString};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::ptr::slice_from_raw_parts_mut;
@@ -244,7 +244,7 @@ impl Handle {
         S: AsRef<str>,
     {
         let args: Vec<CString> = args.into_iter().map(|s| CString::new(s.as_ref()).unwrap()).collect();
-        let mut raw_args: Vec<*const i8> = args.iter().map(|s| s.as_ptr()).collect();
+        let mut raw_args: Vec<*const c_char> = args.iter().map(|s| s.as_ptr()).collect();
         raw_args.push(std::ptr::null()); // Adding null at the end
         unsafe { result!(mpv_command(self.as_mut_ptr(), raw_args.as_ptr())) }
     }
@@ -268,7 +268,7 @@ impl Handle {
         S: AsRef<str>,
     {
         let args: Vec<CString> = args.into_iter().map(|s| CString::new(s.as_ref()).unwrap()).collect();
-        let mut raw_args: Vec<*const i8> = args.iter().map(|s| s.as_ptr()).collect();
+        let mut raw_args: Vec<*const c_char> = args.iter().map(|s| s.as_ptr()).collect();
         raw_args.push(std::ptr::null()); // Adding null at the end
         unsafe { result!(mpv_command_async(self.as_mut_ptr(), reply, raw_args.as_ptr())) }
     }
