@@ -1,6 +1,6 @@
 [package]
 name = "mpv-client"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2021"
 authors = ["Kevin Gavrois <kevin@gavrois.fr>"]
 description = "Bindings for libmpv client API that allow you to create plugins for MPV in Rust"
