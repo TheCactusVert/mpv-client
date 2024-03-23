@@ -4,7 +4,7 @@ mod format;
 
 pub use error::{Error, Result};
 use ffi::*;
-pub use format::Format;
+use format::Format;
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::fmt;
@@ -285,15 +285,22 @@ impl Handle {
     /// usually will fail with `MPV_ERROR_PROPERTY_FORMAT`. In some cases, the data
     /// is automatically converted and access succeeds. For example, i64 is always
     /// converted to f64, and access using String usually invokes a string formatter.
-    pub fn get_property<T: Format, S: AsRef<str>>(&mut self, name: S) -> Result<T> {
+    pub fn get_property<T: Format>(&mut self, name: impl AsRef<str>) -> Result<T> {
         let name = CString::new(name.as_ref())?;
         let handle = unsafe { self.as_mut_ptr() };
         T::from_mpv(|data| unsafe { result!(mpv_get_property(handle, name.as_ptr(), T::MPV_FORMAT, data)) })
     }
 
-    pub fn observe_property<S: AsRef<str>>(&mut self, reply: u64, name: S, format: i32) -> Result<()> {
+    pub fn observe_property<T: Format>(&mut self, reply: u64, name: impl AsRef<str>) -> Result<()> {
         let name = CString::new(name.as_ref())?;
-        unsafe { result!(mpv_observe_property(self.as_mut_ptr(), reply, name.as_ptr(), format)) }
+        unsafe {
+            result!(mpv_observe_property(
+                self.as_mut_ptr(),
+                reply,
+                name.as_ptr(),
+                T::MPV_FORMAT
+            ))
+        }
     }
 
     /// Undo `Handle::observe_property`. This will remove all observed properties for
