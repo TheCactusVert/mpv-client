@@ -163,7 +163,7 @@ impl Handle {
         self.inner.as_mut_ptr()
     }
 
-    pub fn create_client<S: AsRef<str>>(&mut self, name: S) -> Result<Client> {
+    pub fn create_client(&mut self, name: impl AsRef<str>) -> Result<Client> {
         let name = CString::new(name.as_ref())?;
         let handle = unsafe { mpv_create_client(self.as_mut_ptr(), name.as_ptr()) };
         if handle.is_null() {
@@ -173,7 +173,7 @@ impl Handle {
         }
     }
 
-    pub fn create_weak_client<S: AsRef<str>>(&mut self, name: S) -> Result<Client> {
+    pub fn create_weak_client(&mut self, name: impl AsRef<str>) -> Result<Client> {
         let name = CString::new(name.as_ref())?;
         let handle = unsafe { mpv_create_weak_client(self.as_mut_ptr(), name.as_ptr()) };
         if handle.is_null() {
@@ -273,7 +273,7 @@ impl Handle {
         unsafe { result!(mpv_command_async(self.as_mut_ptr(), reply, raw_args.as_ptr())) }
     }
 
-    pub fn set_property<T: Format, S: AsRef<str>>(&mut self, name: S, data: T) -> Result<()> {
+    pub fn set_property<T: Format>(&mut self, name: impl AsRef<str>, data: T) -> Result<()> {
         let name = CString::new(name.as_ref())?;
         let handle = unsafe { self.as_mut_ptr() };
         data.to_mpv(|data| unsafe { result!(mpv_set_property(handle, name.as_ptr(), T::MPV_FORMAT, data)) })
