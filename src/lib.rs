@@ -15,8 +15,6 @@ use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::ptr::slice_from_raw_parts_mut;
 
-pub use mpv_handle as handle;
-
 /// Representation of a borrowed client context used by the client API.
 /// Every client has its own private handle.
 pub struct Handle {
