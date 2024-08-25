@@ -13,6 +13,7 @@ use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::ptr::slice_from_raw_parts_mut;
 
+pub use mpv_client_sys::mpv_handle;
 use mpv_client_sys::*;
 
 /// Representation of a borrowed client context used by the client API.
