@@ -1,4 +1,6 @@
-use super::ffi::{mpv_error, mpv_error_string};
+use crate::mpv_error_MPV_ERROR_GENERIC;
+
+use super::{mpv_error, mpv_error_string};
 
 use std::ffi::{CStr, NulError};
 use std::fmt;
@@ -16,13 +18,13 @@ impl Error {
 
 impl From<NulError> for Error {
     fn from(_: NulError) -> Self {
-        Self::new(mpv_error::GENERIC)
+        Self::new(mpv_error_MPV_ERROR_GENERIC)
     }
 }
 
 impl From<Utf8Error> for Error {
     fn from(_: Utf8Error) -> Self {
-        Self::new(mpv_error::GENERIC)
+        Self::new(mpv_error_MPV_ERROR_GENERIC)
     }
 }
 

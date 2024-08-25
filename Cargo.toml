@@ -7,10 +7,12 @@ description = "Bindings for libmpv client API that allow you to create plugins f
 license = "GPL-3.0"
 repository = "https://github.com/TheCactusVert/mpv-client"
 keywords = ["mpv", "libmpv"]
+build = "build.rs"
 
 [lib]
 name = "mpv_client"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
+[build-dependencies]
+bindgen = "0.70.1"
