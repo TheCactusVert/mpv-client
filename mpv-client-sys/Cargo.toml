@@ -1,0 +1,15 @@
+[package]
+name = "mpv-client-sys"
+version = "1.0.0"
+edition = "2021"
+authors = ["Kevin Gavrois <kevin@gavrois.fr>"]
+description = "Raw bindings for libmpv client API"
+license = "GPL-3.0"
+repository = "https://github.com/TheCactusVert/mpv-client"
+keywords = ["mpv", "libmpv"]
+build = "build.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+bindgen = "*"

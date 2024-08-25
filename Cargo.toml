@@ -1,18 +1,11 @@
-[package]
-name = "mpv-client"
-version = "0.6.2"
-edition = "2021"
+[workspace]
+members = [ "mpv-client-sys", "mpv-client" ]
+resolver = "2"
+
+[workspace.package]
+readme = "README.md"
 authors = ["Kevin Gavrois <kevin@gavrois.fr>"]
-description = "Bindings for libmpv client API that allow you to create plugins for MPV in Rust"
-license = "GPL-3.0"
+edition = "2021"
 repository = "https://github.com/TheCactusVert/mpv-client"
+license = "GPL-3.0"
 keywords = ["mpv", "libmpv"]
-build = "build.rs"
-
-[lib]
-name = "mpv_client"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[build-dependencies]
-bindgen = "0.70.1"

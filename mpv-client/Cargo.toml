@@ -1,0 +1,17 @@
+[package]
+name = "mpv-client"
+version = "1.0.0"
+edition = "2021"
+authors = ["Kevin Gavrois <kevin@gavrois.fr>"]
+description = "Bindings for libmpv client API that allow you to create plugins for MPV in Rust"
+license = "GPL-3.0"
+repository = "https://github.com/TheCactusVert/mpv-client"
+keywords = ["mpv", "libmpv"]
+
+[lib]
+name = "mpv_client"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+mpv-client-sys = { path = "../mpv-client-sys" }

@@ -2,8 +2,6 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
 mod error;
 mod format;
 
@@ -14,6 +12,8 @@ use std::ffi::{c_char, c_void, CStr, CString};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::ptr::slice_from_raw_parts_mut;
+
+use mpv_client_sys::*;
 
 /// Representation of a borrowed client context used by the client API.
 /// Every client has its own private handle.

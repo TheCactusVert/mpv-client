@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 fn main() {
     let bindings = bindgen::Builder::default()
-        .header("/usr/include/mpv/client.h")
+        .header("wrapper.h")
         .generate()
         .expect("Unable to generate bindings");
 
