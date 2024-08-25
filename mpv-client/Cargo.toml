@@ -14,4 +14,4 @@ name = "mpv_client"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-mpv-client-sys = { path = "../mpv-client-sys" }
+ffi = { package = "mpv-client-sys", version = "1.0.0", path = "../mpv-client-sys" }
