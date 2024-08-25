@@ -125,6 +125,16 @@ macro_rules! result {
     };
 }
 
+macro_rules! result_with_code {
+    ($f:expr) => {
+        if $f >= mpv_error_MPV_ERROR_SUCCESS {
+            Ok($f)
+        } else {
+            Err(Error::new($f))
+        }
+    };
+}
+
 #[macro_export]
 macro_rules! osd {
     ($client:expr, $duration:expr, $($arg:tt)*) => {
@@ -310,8 +320,8 @@ impl Handle {
     /// which the given number was passed as reply to `Handle::observe_property`.
     ///
     /// Safe to be called from mpv render API threads.
-    pub fn unobserve_property(&mut self, registered_reply: u64) -> Result<()> {
-        unsafe { result!(mpv_unobserve_property(self.as_mut_ptr(), registered_reply)) }
+    pub fn unobserve_property(&mut self, registered_reply: u64) -> Result<i32> {
+        unsafe { result_with_code!(mpv_unobserve_property(self.as_mut_ptr(), registered_reply)) }
     }
 
     pub fn hook_add(&mut self, reply: u64, name: &str, priority: i32) -> Result<()> {
