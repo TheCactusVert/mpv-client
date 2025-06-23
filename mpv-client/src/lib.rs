@@ -4,9 +4,11 @@
 
 mod error;
 mod format;
+pub mod node;
 
 pub use error::{Error, Result};
-use format::Format;
+pub use format::Format;
+pub use node::Node;
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::fmt;
