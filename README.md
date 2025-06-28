@@ -17,7 +17,7 @@ name = "mpv_plugin"
 crate-type = ["cdylib"]
 
 [dependencies]
-mpv-client = "0.6.2"
+mpv-client = "1.1.0"
 ```
 
 And then the code `src/lib.rs`:
