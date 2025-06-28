@@ -1,7 +1,9 @@
-use super::mpv_free;
 use super::Result;
+use super::{mpv_format_MPV_FORMAT_NONE, mpv_free, mpv_free_node_contents, mpv_node, mpv_node__bindgen_ty_1};
 
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
+
+use super::node::{from_mpv_node, to_mpv_node, Node};
 
 pub trait Format: Sized + Default {
     const MPV_FORMAT: u32;
@@ -83,5 +85,39 @@ impl Format for f64 {
     fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
         let mut data = Self::default();
         fun(&mut data as *mut _ as *mut c_void).map(|()| data)
+    }
+}
+
+impl Format for Node {
+    const MPV_FORMAT: u32 = 6;
+
+    fn from_ptr(ptr: *const c_void) -> Result<Self> {
+        if ptr.is_null() {
+            return Ok(Node::None);
+        }
+
+        let node = unsafe { &mut *(ptr as *mut mpv_node) };
+        let result = from_mpv_node(node);
+        unsafe { mpv_free_node_contents(node) };
+        Ok(result)
+    }
+
+    fn to_mpv<F: Fn(*mut c_void) -> Result<()>>(self, fun: F) -> Result<()> {
+        let mpv_node_ptr = to_mpv_node(&self);
+        let res = fun(mpv_node_ptr as *mut c_void);
+        unsafe { mpv_free_node_contents(mpv_node_ptr) };
+        res
+    }
+
+    fn from_mpv<F: Fn(*mut c_void) -> Result<()>>(fun: F) -> Result<Self> {
+        let mut node = mpv_node {
+            format: mpv_format_MPV_FORMAT_NONE,
+            u: mpv_node__bindgen_ty_1 { int64: 0 },
+        };
+
+        fun(&mut node as *mut _ as *mut c_void)?;
+        let result = from_mpv_node(&mut node);
+        unsafe { mpv_free_node_contents(&mut node) };
+        Ok(result)
     }
 }
