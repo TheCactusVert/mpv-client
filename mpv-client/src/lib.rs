@@ -206,7 +206,7 @@ impl Handle {
     }
 
     /// Wait for the next event, or until the timeout expires, or if another thread
-    /// makes a call to `mpv_wakeup()`. Passing 0 as timeout will never wait, and
+    /// makes a call to [`Handle::wakeup`]. Passing 0 as timeout will never wait, and
     /// is suitable for polling.
     ///
     /// The internal event queue has a limited size (per client handle). If you
@@ -225,6 +225,23 @@ impl Handle {
     /// threads.
     pub fn wait_event(&mut self, timeout: f64) -> Event {
         unsafe { Event::from_ptr(mpv_wait_event(self.as_mut_ptr(), timeout)) }
+    }
+
+    /// Interrupt the current [`Handle::wait_event`] call. This will wake up the thread
+    /// currently waiting in [`Handle::wait_event`]. If no thread is waiting, the next
+    /// [`Handle::wait_event`] call will return immediately (this is to avoid lost
+    /// wakeups).
+    ///
+    /// [`Handle::wait_event`] will receive a [`Event::None`] if it's woken up due to
+    /// this call. But note that this dummy event might be skipped if there are
+    /// already other events queued. All what counts is that the waiting thread
+    /// is woken up at all.
+    ///
+    /// Safe to be called from mpv render API threads.
+    pub fn wakeup(&mut self) {
+        unsafe {
+            mpv_wakeup(self.as_mut_ptr());
+        }
     }
 
     /// Return the name of this client handle. Every client has its own unique
@@ -266,27 +283,23 @@ impl Handle {
         raw_args.push(std::ptr::null()); // Adding null at the end
         unsafe { result!(mpv_command(self.as_mut_ptr(), raw_args.as_mut_ptr())) }
     }
-    
+
+    /// This is essentially identical [`Handle::command`] but it also returns a result.
     pub fn command_ret<I, S>(&mut self, args: I) -> Result<Node>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
-        let args: Vec<CString> = args
-            .into_iter()
-            .map(|s| CString::new(s.as_ref()).unwrap())
-            .collect();
+        let args: Vec<CString> = args.into_iter().map(|s| CString::new(s.as_ref()).unwrap()).collect();
         let mut raw_args: Vec<*const c_char> = args.iter().map(|s| s.as_ptr()).collect();
         raw_args.push(std::ptr::null()); // Adding null at the end
 
         let mut res = MaybeUninit::<mpv_node>::zeroed();
-        let ret =
-            unsafe { mpv_command_ret(self.as_mut_ptr(), raw_args.as_mut_ptr(), res.as_mut_ptr()) };
+        let ret = unsafe { mpv_command_ret(self.as_mut_ptr(), raw_args.as_mut_ptr(), res.as_mut_ptr()) };
 
         result!(ret)?;
         unsafe { return Ok(from_mpv_node(res.assume_init_mut())) }
     }
-
 
     /// Same as `Handle::command`, but run the command asynchronously.
     ///
